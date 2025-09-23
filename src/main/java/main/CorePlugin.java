@@ -31,7 +31,6 @@ public class CorePlugin extends JavaPlugin implements Listener {
         getLogger().info("Плагин включен!");
         getServer().getPluginManager().registerEvents(this, this);
 
-        // Инициализируем менеджер диалогов
         DialogManager dialogManager = new DialogManager();
         getServer().getPluginManager().registerEvents(dialogManager, this); // для player.Quoit ивента
 
@@ -47,7 +46,6 @@ public class CorePlugin extends JavaPlugin implements Listener {
 
         steerVehicleManager.registerSteerVehicleListener(this, handlers);
 
-        // убедиться, что папка плагина существует
         File data = getDataFolder();
         if (!data.exists()) data.mkdirs();
 
@@ -64,7 +62,6 @@ public class CorePlugin extends JavaPlugin implements Listener {
         // Добавляем trait к NPC
         ivan.addTrait(dialogueTrait);
 
-        // Спавним NPC на точке спавна сервера
         Location spawnLocation = Bukkit.getWorlds().get(0).getSpawnLocation();
         ivan.spawn(spawnLocation);
     }

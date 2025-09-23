@@ -54,7 +54,7 @@ public class DialogManager implements Listener, ISteerVehicleHandler {
         }
 
         DialogueLine line = lines.get(idx);
-        // Отправляем игроку текст NPC (например, "NPC: Привет, путник...")
+        // Отправляем игроку текст NPC
         if (line.text != null && !line.text.isEmpty()) {
             player.sendMessage(line.speaker + ": " + line.text);
         }
@@ -141,7 +141,7 @@ public class DialogManager implements Listener, ISteerVehicleHandler {
         }
     }
 
-    // Если игрок вышел из игры – отменяем активный выбор (прогресс диалога сохраняется)
+    // Если игрок вышел из игры – отменяем активный выбор
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
@@ -194,7 +194,7 @@ public class DialogManager implements Listener, ISteerVehicleHandler {
         }
     }
 
-    // Класс для хранения текущих опций выбора (используется ActionBar)
+    // Класс для хранения текущих опций выбора
     private static class ChoiceSession {
         private final List<PlayerOption> options;
         private final Consumer<Integer> onSelect;

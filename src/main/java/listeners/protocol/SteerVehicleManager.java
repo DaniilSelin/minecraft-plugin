@@ -17,7 +17,6 @@ import listeners.api.ISteerVehicleHandler;
 
 public class SteerVehicleManager {
 
-    // Функции для логирования вместо Plugin
     private final Consumer<String> infoLogger;
     private final Consumer<String> errorLogger;
 
@@ -60,7 +59,6 @@ public class SteerVehicleManager {
 
             infoLogger.accept("пакет пойман и обработан");
 
-            // Вот этот фор
             for (ISteerVehicleHandler handler : handlers) {
                 handler.handleSteerVehicle(player, forward, backward, jump);
             }

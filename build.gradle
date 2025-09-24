@@ -5,7 +5,7 @@ plugins {
 }
 
 group = 'main'
-version = '1.4.2'
+version = '1.4.3'
 
 tasks.named('shadowJar') {
     archiveBaseName.set('DevOps')

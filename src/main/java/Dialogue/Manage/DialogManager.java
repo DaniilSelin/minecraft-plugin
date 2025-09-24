@@ -4,6 +4,8 @@ import Dialogue.Dialogue;
 import Dialogue.DialogueLine;
 import Dialogue.DialogueStage;
 import Dialogue.PlayerOption;
+
+import com.destroystokyo.paper.event.player.PlayerJumpEvent;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -13,7 +15,6 @@ import org.bukkit.Location;
 import listeners.api.ISteerVehicleHandler;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.Bukkit;
-import org.bukkit.event.player.PlayerMoveEvent;
 
 import java.util.HashMap;
 import java.util.List;
@@ -183,8 +184,6 @@ public class DialogManager implements Listener, ISteerVehicleHandler {
 
         removeHologramLines(this.plugin, session.getHologramLines());
 
-        String sessionKey = session.getNpcName() + "_" + player.getUniqueId().toString();
-        conversationSessions.remove(sessionKey);
         player.sendActionBar("");
     }
 
@@ -220,7 +219,7 @@ public class DialogManager implements Listener, ISteerVehicleHandler {
     }
 
     @EventHandler
-    public void onPlayerJump(org.bukkit.event.player.PlayerJumpEvent e) {
+    public void onPlayerJump(PlayerJumpEvent e) {
         Player p = e.getPlayer();
         if (!activeChoices.containsKey(p)) return;
         e.setCancelled(true);

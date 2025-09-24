@@ -31,7 +31,7 @@ public class CorePlugin extends JavaPlugin implements Listener {
         getLogger().info("Плагин включен!");
         getServer().getPluginManager().registerEvents(this, this);
 
-        DialogManager dialogManager = new DialogManager();
+        DialogManager dialogManager = new DialogManager(this);
         getServer().getPluginManager().registerEvents(dialogManager, this); // для player.Quoit ивента
 
         // регистрируем слушателей пакетов

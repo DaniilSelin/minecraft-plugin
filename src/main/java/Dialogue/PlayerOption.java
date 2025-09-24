@@ -10,16 +10,16 @@ import java.util.Map;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class PlayerOption {
     @JsonProperty("id")
-    public String id;                   // id опции
+    public int id;                   // id опции
 
     @JsonProperty("text")
     public String text;                 // текст варианта, что видит игрок
 
     @JsonProperty("next_stage_id")
-    public String nextStageId;          // куда ведёт выбор
+    public int nextStageId;          // куда ведёт выбор
 
     @JsonProperty("next_dialogue_id")
-    public String nextDialogueId;       // переход в другой диалог (неюзабельно)
+    public int nextDialogueId;       // переход в другой диалог (неюзабельно)
 
     @JsonProperty("conditions")
     public Map<String, Object> conditions; // условия видимости (ключи: "level", "flag", "item" и т.п.)

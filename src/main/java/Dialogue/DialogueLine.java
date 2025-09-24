@@ -8,7 +8,7 @@ import java.util.List;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class DialogueLine {
     @JsonProperty("id")
-    public String id;                   // id реплики внутри этапа (опционально)
+    public int id;                   // id реплики внутри этапа (опционально)
 
     @JsonProperty("speaker")
     public String speaker;              // кто говорит (имя).

@@ -9,7 +9,7 @@ import java.util.Map;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class DialogueStage {
     @JsonProperty("id")
-    public String id;                   // id этапа
+    public int id;                   // id этапа
 
     @JsonProperty("lines")
     public List<DialogueLine> lines;    // реплики NPC в этом этапе (последовательность)

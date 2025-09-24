@@ -8,34 +8,46 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.EventHandler;
+import org.bukkit.entity.ArmorStand;
+import org.bukkit.Location;
 import listeners.api.ISteerVehicleHandler;
+import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.Bukkit;
+import org.bukkit.event.player.PlayerMoveEvent;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
 import java.util.function.Consumer;
+
+import Dialogue.Manage.Session.ConversationSession;
+import Dialogue.Manage.Session.ChoiceSession;
 
 public class DialogManager implements Listener, ISteerVehicleHandler {
 
+    // костыль(
+    private final JavaPlugin plugin;
     // Сессии диалогов: ключ = npcName + "_" + playerUUID
     private final Map<String, ConversationSession> conversationSessions = new HashMap<>();
-    // Активные выборы для каждого игрока (отображаются в ActionBar)
+    // Активные выборы
     private final Map<Player, ChoiceSession> activeChoices = new HashMap<>();
 
-    // Начало или возобновление диалога игрока с данным NPC
+    public DialogManager(JavaPlugin plugin) {
+        this.plugin = plugin;
+    }
+
     public void beginConversation(Player player, String npcName, Dialogue dialogue) {
         String sessionKey = npcName + "_" + player.getUniqueId().toString();
         ConversationSession session = conversationSessions.get(sessionKey);
         if (session == null) {
-            // Если новой сессии ещё нет – создаём её, начиная с первой стадии
+            // Если сессии ещё нет – создаём её
             session = new ConversationSession(dialogue, npcName);
             conversationSessions.put(sessionKey, session);
         }
-        // Показываем текущее состояние диалога (реплика NPC и варианты ответа, если они есть)
         showCurrentLine(player, session);
     }
 
-    // Отображает текущую линию диалога и варианты ответа игроку
     private void showCurrentLine(Player player, ConversationSession session) {
         DialogueStage stage = session.getCurrentStage();
         if (stage == null) {
@@ -44,45 +56,98 @@ public class DialogManager implements Listener, ISteerVehicleHandler {
             return;
         }
 
-        List<DialogueLine> lines = stage.lines;
-        int idx = session.getCurrentLineIndex();
-
-        // Если вышли за границы реплик текущей стадии, диалог завершается (без перехода)
-        if (idx >= lines.size()) {
-            endConversation(player, session);
-            return;
-        }
-
-        DialogueLine line = lines.get(idx);
-        // Отправляем игроку текст NPC
-        if (line.text != null && !line.text.isEmpty()) {
-            player.sendMessage(line.speaker + ": " + line.text);
-        }
-
-        // Получаем варианты ответа из текущей реплики (PlayerOption)
-        List<PlayerOption> options = line.options;
-        if (options != null && !options.isEmpty()) {
-            // Если есть опции, запускаем выбор игрока
-            startChoice(player, options, selectedIndex -> {
-                PlayerOption chosen = options.get(selectedIndex);
-                if (chosen.nextStageId != null) {
-                    // Переход к следующей стадии диалога
-                    session.setStage(chosen.nextStageId);
-                    session.setLineIndex(0);
-                    showCurrentLine(player, session);
-                } else {
-                    // Если nextStageId == null – диалог закончился
-                    endConversation(player, session);
-                }
-            });
-        } else {
-            // Если опций нет, переходим к следующей реплике текущей стадии
-            session.incrementLineIndex();
-            showCurrentLine(player, session);
-        }
+        showNPCReplice(session, player);
+        showPlayerOption(session, player);
     }
 
-    // Инициализация сессии выбора (ActionBar) с вариантами ответов
+    private void showPlayerOption(ConversationSession session, Player player) {
+        DialogueLine line = session.getCurrentLine();
+
+        List<PlayerOption> display = new ArrayList<>();
+        if (line.options != null) display.addAll(line.options);
+
+        PlayerOption cont = new PlayerOption();
+        cont.id = -1;
+        cont.text = "...";
+        cont.nextStageId = session.getCurrentStage().id;
+        display.add(cont);
+
+        startChoice(player, display, selectedIndex -> {
+            PlayerOption chosen = display.get(selectedIndex);
+            if (chosen.id == -1) {
+                // Опция "..." – завершаем диалог
+                Bukkit.getScheduler().runTask(plugin, () -> endConversation(player, session));
+            } else {
+                session.setStage(chosen.nextStageId);
+                // Продолжаем диалог на главном потоке
+                Bukkit.getScheduler().runTask(plugin, () -> showCurrentLine(player, session));
+            }
+        });
+    }
+
+    public void showNPCReplice(ConversationSession session, Player player) {
+        DialogueLine line = session.getCurrentLine();
+
+        // Тут можно работу в чате организовать
+        // if (line.text != null && !line.text.isEmpty()) {
+        //     player.sendMessage(line.speaker + ": " + line.text);
+        // }
+
+        String text = (line.text == null) ? "" : line.text;
+        Location eye = player.getEyeLocation();
+        Location baseLoc = eye.clone().add(eye.getDirection().normalize().multiply(2.75)).add(0, -0.3, 0);
+
+        removeHologramLines(this.plugin, session.getHologramLines());
+
+        session.setHologramLines(null);
+
+        List<String> splitLines = SplitNPCReplice(text);
+
+        List<String> allLines = FromateNPCReplice(splitLines);
+
+        List<ArmorStand> newLines = CreateHologramLines(allLines, player, baseLoc);
+
+        session.setHologramLines(newLines);
+    }
+
+    public List<String> SplitNPCReplice(String text) {
+        List<String> splitLines = new ArrayList<>();
+        int maxLen = 35;
+        while (!text.isEmpty()) {
+            int end = Math.min(maxLen, text.length());
+            splitLines.add(text.substring(0, end));
+            text = text.substring(end);
+        }
+        return splitLines;
+    }
+
+    public List<String> FromateNPCReplice(List<String> splitLines) {
+        List<String> allLines = new ArrayList<>();
+        for (String s : splitLines) {
+            allLines.add("§a" + s);
+        }
+        return allLines;
+    }
+
+    public List<ArmorStand> CreateHologramLines(List<String> alllines, Player player, Location baseLoc) {
+        List<ArmorStand> newLines = new ArrayList<>();
+        double yOffset = 0.0;
+        for (String lineText : alllines) {
+            ArmorStand as = player.getWorld().spawn(baseLoc.clone().add(0, -yOffset, 0), ArmorStand.class, stand -> {
+                stand.setInvisible(true);
+                stand.setMarker(true);
+                stand.setCustomName(lineText);
+                stand.setCustomNameVisible(true);
+                stand.setGravity(false);
+                stand.setSilent(true);
+                stand.setSmall(true);
+            });
+            newLines.add(as);
+            yOffset += 0.25; // расстояние между строками
+        }
+        return newLines;
+    }
+
     private void startChoice(Player player, List<PlayerOption> options, Consumer<Integer> onSelect) {
         ChoiceSession choiceSession = new ChoiceSession(options, onSelect);
         activeChoices.put(player, choiceSession);
@@ -92,37 +157,48 @@ public class DialogManager implements Listener, ISteerVehicleHandler {
         player.setFlySpeed(0.0f);
     }
 
-    // Отправка ActionBar сообщения с вариантами; текущий выделенный вариант – красным цветом
     private void sendChoiceMessage(Player player) {
         ChoiceSession cs = activeChoices.get(player);
         if (cs == null) return;
 
         StringBuilder msg = new StringBuilder();
-        for (int i = 0; i < cs.options.size(); i++) {
-            if (i == cs.currentIndex) {
+        for (int i = 0; i < cs.SizeOption(); i++) {
+            if (i == cs.getCurrentIndex()) {
                 msg.append("§c"); // выделяем красным текущую опцию
             } else {
                 msg.append("§7");
             }
-            msg.append(cs.options.get(i).text);
-            if (i < cs.options.size() - 1) {
+            msg.append(cs.GetTextOp(i));
+            if (i < cs.SizeOption() - 1) {
                 msg.append(" §7| "); // разделитель между опциями
             }
         }
         player.sendActionBar(msg.toString());
     }
 
-    // Завершение разговора: удаляем сессию выбора, восстанавливаем управление игроком, очищаем сессию диалога
     private void endConversation(Player player, ConversationSession session) {
-        activeChoices.remove(player);              // убираем активные варианты
-        player.setWalkSpeed(0.2f);                 // восстанавливаем скорость игрока
+        activeChoices.remove(player);
+        player.setWalkSpeed(0.2f);
         player.setFlySpeed(0.1f);
+
+        removeHologramLines(this.plugin, session.getHologramLines());
+
         String sessionKey = session.getNpcName() + "_" + player.getUniqueId().toString();
-        conversationSessions.remove(sessionKey);   // удаляем сохранённую сессию диалога
-        player.sendActionBar("");                 // очищаем ActionBar
+        conversationSessions.remove(sessionKey);
+        player.sendActionBar("");
     }
 
-    // Обработка нажатий: вперёд/назад для смены варианта, прыжок – выбор текущего
+    private void removeHologramLines(JavaPlugin plugin, List<ArmorStand> lines) {
+        if (lines == null) return;
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            for (ArmorStand as : lines) {
+                if (as != null && !as.isDead()) {
+                    as.remove();
+                }
+            }
+        });
+    }
+
     @Override
     public void handleSteerVehicle(Player player, boolean forward, boolean backward, boolean jump) {
         ChoiceSession cs = activeChoices.get(player);
@@ -135,10 +211,19 @@ public class DialogManager implements Listener, ISteerVehicleHandler {
             sendChoiceMessage(player);
         } else if (jump) {
             // Подтверждаем выбор: сохраняем индекс и сразу удаляем сессию выбора
-            int sel = cs.currentIndex;
-            activeChoices.remove(player);
-            cs.onSelect.accept(sel);
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                int sel = cs.getCurrentIndex();
+                activeChoices.remove(player); // снимаем UI
+                cs.Accept(sel);
+            });
         }
+    }
+
+    @EventHandler
+    public void onPlayerJump(org.bukkit.event.player.PlayerJumpEvent e) {
+        Player p = e.getPlayer();
+        if (!activeChoices.containsKey(p)) return;
+        e.setCancelled(true);
     }
 
     // Если игрок вышел из игры – отменяем активный выбор
@@ -146,69 +231,5 @@ public class DialogManager implements Listener, ISteerVehicleHandler {
     public void onPlayerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
         activeChoices.remove(player);
-        // Диалог в conversationSessions оставляем для сохранения прогресса (при следующем входе он возобновится)
-    }
-
-    // Класс, хранящий состояние разговора (диалог, текущая стадия и индекс реплики)
-    private static class ConversationSession {
-        private final Dialogue dialogue;
-        private final String npcName;
-        private String currentStageId;
-        private int lineIndex = 0;
-
-        public ConversationSession(Dialogue dialogue, String npcName) {
-            this.dialogue = dialogue;
-            this.npcName = npcName;
-            // Стартуем с первой стадии списка
-            if (dialogue.stages != null && !dialogue.stages.isEmpty()) {
-                this.currentStageId = dialogue.stages.get(0).id;
-            }
-        }
-
-        public String getNpcName() {
-            return npcName;
-        }
-
-        public DialogueStage getCurrentStage() {
-            if (dialogue.stages == null) return null;
-            for (DialogueStage st : dialogue.stages) {
-                if (st.id.equals(currentStageId)) {
-                    return st;
-                }
-            }
-            return null;
-        }
-
-        public int getCurrentLineIndex() {
-            return lineIndex;
-        }
-        public void incrementLineIndex() {
-            lineIndex++;
-        }
-        public void setLineIndex(int idx) {
-            this.lineIndex = idx;
-        }
-        public void setStage(String nextStageId) {
-            this.currentStageId = nextStageId;
-            this.lineIndex = 0;
-        }
-    }
-
-    // Класс для хранения текущих опций выбора
-    private static class ChoiceSession {
-        private final List<PlayerOption> options;
-        private final Consumer<Integer> onSelect;
-        private int currentIndex = 0;
-
-        public ChoiceSession(List<PlayerOption> options, Consumer<Integer> onSelect) {
-            this.options = options;
-            this.onSelect = onSelect;
-        }
-        public void next() {
-            currentIndex = (currentIndex + 1) % options.size();
-        }
-        public void previous() {
-            currentIndex = (currentIndex - 1 + options.size()) % options.size();
-        }
     }
 }

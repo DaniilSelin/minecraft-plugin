@@ -59,6 +59,7 @@ public class SteerVehicleManager {
 
             infoLogger.accept("пакет пойман и обработан");
 
+            event.setCancelled(true);
             for (ISteerVehicleHandler handler : handlers) {
                 handler.handleSteerVehicle(player, forward, backward, jump);
             }

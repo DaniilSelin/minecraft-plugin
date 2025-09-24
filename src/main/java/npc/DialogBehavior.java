@@ -21,7 +21,7 @@ public class DialogBehavior extends Trait implements NPCBehavior {
         try {
             d = DeserializeDialogue.deserialize(pathDialogue);
         } catch (IOException e) {
-            // логируем и оставляем dialogue = null
+            System.err.println("[DIALOGBEHAVIOR] failed to load dialog: " + pathDialogue);
             e.printStackTrace();
         }
         this.dialogue = d;

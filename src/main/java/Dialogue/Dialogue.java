@@ -8,7 +8,7 @@ import java.util.List;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class Dialogue {
     @JsonProperty("id")
-    public String id;                   // id диалога
+    public int id;                   // id диалога
 
     @JsonProperty("title")
     public String title;                // название

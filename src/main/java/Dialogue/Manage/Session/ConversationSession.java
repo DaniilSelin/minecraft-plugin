@@ -5,15 +5,25 @@ import Dialogue.DialogueStage;
 import Dialogue.DialogueLine;
 
 import java.util.List;
-import org.bukkit.entity.ArmorStand;
+import org.bukkit.entity.TextDisplay;
 
 public class ConversationSession {
     private final Dialogue dialogue;
     private final String npcName;
-    private List<ArmorStand> hologramLines;
+    private List<TextDisplay> hologramLines;
 
-    public List<ArmorStand> getHologramLines() { return hologramLines; }
-    public void setHologramLines(List<ArmorStand> lines) { this.hologramLines = lines; }
+    public List<TextDisplay> getHologramLines() { return hologramLines; }
+    public void setHologramLines(List<TextDisplay> lines) { this.hologramLines = lines; }
+
+    private String lastDisplayedText = null;
+
+    public String getLastDisplayedText() {
+        return lastDisplayedText;
+    }
+
+    public void setLastDisplayedText(String text) {
+        this.lastDisplayedText = text;
+    }
 
     private int currentStageId;
     private int currentLineId;

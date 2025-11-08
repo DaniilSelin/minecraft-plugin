@@ -10,11 +10,12 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.EventHandler;
-import org.bukkit.entity.ArmorStand;
+import org.bukkit.entity.TextDisplay;
 import org.bukkit.Location;
 import listeners.api.ISteerVehicleHandler;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.Bukkit;
+import org.bukkit.entity.Display;
 
 import java.util.HashMap;
 import java.util.List;
@@ -42,7 +43,6 @@ public class DialogManager implements Listener, ISteerVehicleHandler {
         String sessionKey = npcName + "_" + player.getUniqueId().toString();
         ConversationSession session = conversationSessions.get(sessionKey);
         if (session == null) {
-            // Если сессии ещё нет – создаём её
             session = new ConversationSession(dialogue, npcName);
             conversationSessions.put(sessionKey, session);
         }
@@ -80,7 +80,7 @@ public class DialogManager implements Listener, ISteerVehicleHandler {
                 Bukkit.getScheduler().runTask(plugin, () -> endConversation(player, session));
             } else {
                 session.setStage(chosen.nextStageId);
-                // Продолжаем диалог на главном потоке
+                // Продолжаем диалог
                 Bukkit.getScheduler().runTask(plugin, () -> showCurrentLine(player, session));
             }
         });
@@ -88,27 +88,33 @@ public class DialogManager implements Listener, ISteerVehicleHandler {
 
     public void showNPCReplice(ConversationSession session, Player player) {
         DialogueLine line = session.getCurrentLine();
+        String text = (line == null || line.text == null) ? "" : line.text;
 
-        // Тут можно работу в чате организовать
-        // if (line.text != null && !line.text.isEmpty()) {
-        //     player.sendMessage(line.speaker + ": " + line.text);
-        // }
+        org.bukkit.util.Vector dir = player.getEyeLocation().getDirection().normalize();
+        double forward = 3.0;
+        double height = 1.5;
 
-        String text = (line.text == null) ? "" : line.text;
-        Location eye = player.getEyeLocation();
-        Location baseLoc = eye.clone().add(eye.getDirection().normalize().multiply(2.75)).add(0, -0.3, 0);
+        Location baseLoc = player.getLocation().clone().add(dir.multiply(forward)).add(0, height, 0);
 
-        removeHologramLines(this.plugin, session.getHologramLines());
+        List<TextDisplay> old = session.getHologramLines();
+        if (old != null) {
+            removeHologramLines(this.plugin, old);
+            session.setHologramLines(null);
+        }
 
-        session.setHologramLines(null);
-
-        List<String> splitLines = SplitNPCReplice(text);
-
+        List<String> splitLines = SplitNPCReplice(text.isEmpty() ? "TEST DISPLAY" : text);
         List<String> allLines = FromateNPCReplice(splitLines);
 
-        List<ArmorStand> newLines = CreateHologramLines(allLines, player, baseLoc);
-
-        session.setHologramLines(newLines);
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            try {
+                List<TextDisplay> newLines = CreateHologramLines(allLines, player, baseLoc);
+                session.setHologramLines(newLines);
+                session.setLastDisplayedText(String.join("\n", allLines));
+            } catch (Throwable t) {
+                plugin.getLogger().severe("Failed to create TextDisplays: " + t.getMessage());
+                t.printStackTrace();
+            }
+        });
     }
 
     public List<String> SplitNPCReplice(String text) {
@@ -130,22 +136,39 @@ public class DialogManager implements Listener, ISteerVehicleHandler {
         return allLines;
     }
 
-    public List<ArmorStand> CreateHologramLines(List<String> alllines, Player player, Location baseLoc) {
-        List<ArmorStand> newLines = new ArrayList<>();
+    public List<TextDisplay> CreateHologramLines(List<String> alllines, Player player, Location baseLoc) {
+        List<TextDisplay> newLines = new ArrayList<>();
         double yOffset = 0.0;
+
         for (String lineText : alllines) {
-            ArmorStand as = player.getWorld().spawn(baseLoc.clone().add(0, -yOffset, 0), ArmorStand.class, stand -> {
-                stand.setInvisible(true);
-                stand.setMarker(true);
-                stand.setCustomName(lineText);
-                stand.setCustomNameVisible(true);
-                stand.setGravity(false);
-                stand.setSilent(true);
-                stand.setSmall(true);
-            });
-            newLines.add(as);
-            yOffset += 0.25; // расстояние между строками
+            Location loc = baseLoc.clone().add(0, -yOffset, 0);
+
+            TextDisplay td = null;
+            try {
+                td = player.getWorld().spawn(loc, TextDisplay.class, display -> {
+                    display.setText(lineText);
+
+                    // ориентация
+                    try { display.setBillboard(Display.Billboard.CENTER); } catch (Throwable ignored) {}
+
+                    // видимость и контраст
+                    try { display.setViewRange(256.0f); } catch (Throwable ignored) {}
+                    try { display.setLineWidth(200); } catch (Throwable ignored) {}
+                    try { display.setSeeThrough(true); } catch (Throwable ignored) {}
+                    try { display.setTextOpacity((byte)255); } catch (Throwable ignored) {}
+                    try { display.setShadowed(true); } catch (Throwable ignored) {}
+                    try { display.setGlowing(true); } catch (Throwable ignored) {}
+                    try { display.setPersistent(true); } catch (Throwable ignored) {}
+                    try { display.setGravity(false); } catch (Throwable ignored) {}
+                });
+            } catch (Throwable t) {
+                plugin.getLogger().warning("Spawn TextDisplay failed for loc " + loc + ": " + t.getMessage());
+            }
+
+            if (td != null) newLines.add(td);
+            yOffset += 0.25;
         }
+
         return newLines;
     }
 
@@ -187,12 +210,12 @@ public class DialogManager implements Listener, ISteerVehicleHandler {
         player.sendActionBar("");
     }
 
-    private void removeHologramLines(JavaPlugin plugin, List<ArmorStand> lines) {
+    private void removeHologramLines(JavaPlugin plugin, List<TextDisplay> lines) {
         if (lines == null) return;
         Bukkit.getScheduler().runTask(plugin, () -> {
-            for (ArmorStand as : lines) {
-                if (as != null && !as.isDead()) {
-                    as.remove();
+            for (TextDisplay td : lines) {
+                if (td != null && !td.isDead()) {
+                    td.remove();
                 }
             }
         });

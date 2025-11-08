@@ -7,3 +7,6 @@ commands:
   startdialog:
     description: Start test dialog with NPC
     usage: /startdialog
+  loaddialogs:
+    description: Загружает все диалоги и создаёт NPC
+    usage: /loaddialogs

@@ -68,7 +68,6 @@ public class CorePlugin extends JavaPlugin implements Listener {
         NPC ivan = CitizensAPI.getNPCRegistry().createNPC(EntityType.VILLAGER, name);
         DialogBehavior dialogueTrait = new DialogBehavior(dialogManager, dialogFile.getPath(), name);
 
-        // Добавляем trait к NPC
         ivan.addTrait(dialogueTrait);
 
         Location spawnLocation = Bukkit.getWorlds().get(0).getSpawnLocation();

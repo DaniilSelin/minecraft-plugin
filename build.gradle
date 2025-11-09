@@ -1,0 +1,58 @@
+plugins {
+    id 'java'
+    id 'io.papermc.paperweight.userdev' version '2.0.0-beta.18'
+    id 'com.github.johnrengelman.shadow' version '8.1.1' // плагин для "fat jar"
+}
+
+group = 'main'
+version = '1.4.4'
+
+tasks.named('shadowJar') {
+    archiveBaseName.set('DevOps')
+    archiveClassifier.set('')
+    archiveVersion.set('1.4')
+    mergeServiceFiles() // важно для Spigot/Paper
+}
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://repo.papermc.io/repository/maven-public/' } // Paper
+    maven { url = 'https://maven.citizensnpcs.co/repo'} // Citizens2
+    maven { url 'https://jitpack.io' }
+}
+
+dependencies {
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.15.2")
+
+    // Подтянет и API, и NMS
+    paperweight.paperDevBundle("1.21.8-R0.1-SNAPSHOT")
+
+    // Citizens2
+    compileOnly('net.citizensnpcs:citizens-main:2.0.35-SNAPSHOT'){
+        exclude group: '*', module: '*'
+    }
+    compileOnly files('libs/BetonQuest.jar')
+    compileOnly 'net.dmulloy2:ProtocolLib:5.4.0'
+
+    // Тесты
+    testImplementation platform('org.junit:junit-bom:5.10.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+java {
+    sourceCompatibility = '21'
+    targetCompatibility = '21'
+
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}

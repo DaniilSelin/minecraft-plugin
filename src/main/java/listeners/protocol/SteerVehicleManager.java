@@ -57,8 +57,6 @@ public class SteerVehicleManager {
             boolean backward = backwardField.getBoolean(input);
             boolean jump = jumpField.getBoolean(input);
 
-            infoLogger.accept("пакет пойман и обработан");
-
             event.setCancelled(true);
             for (ISteerVehicleHandler handler : handlers) {
                 handler.handleSteerVehicle(player, forward, backward, jump);

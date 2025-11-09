@@ -1,9 +1,9 @@
-package Dialogue.Manage.Session;
-
-import Dialogue.PlayerOption;
+package dialogue.store.session;
 
 import java.util.List;
 import java.util.function.Consumer;
+
+import dialogue.models.PlayerOption;
 
 public class ChoiceSession {
     private final List<PlayerOption> options;

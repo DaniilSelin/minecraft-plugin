@@ -1,11 +1,11 @@
-package Dialogue.Manage.Session;
-
-import Dialogue.Dialogue;
-import Dialogue.DialogueStage;
-import Dialogue.DialogueLine;
+package dialogue.store.session;
 
 import java.util.List;
 import org.bukkit.entity.TextDisplay;
+
+import dialogue.models.Dialogue;
+import dialogue.models.DialogueLine;
+import dialogue.models.DialogueStage;
 
 public class ConversationSession {
     private final Dialogue dialogue;

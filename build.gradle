@@ -10,11 +10,8 @@ version = '1.5.1'
 tasks.named('shadowJar') {
     archiveBaseName.set('DevOps')
     archiveClassifier.set('')
-    archiveVersion.set('1.4')
+    archiveVersion.set('1.5')
     mergeServiceFiles()
-
-    mergeServiceFiles()
-    configurations = [project.configurations.runtimeClasspath]
 }
 
 
@@ -26,7 +23,7 @@ repositories {
 
 dependencies {
     implementation("com.fasterxml.jackson.core:jackson-databind:2.15.2")
-    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.15.2")
+    implementation "org.yaml:snakeyaml:2.1"
 
     // Подтянет и API, и NMS
     paperweight.paperDevBundle("1.21.8-R0.1-SNAPSHOT")

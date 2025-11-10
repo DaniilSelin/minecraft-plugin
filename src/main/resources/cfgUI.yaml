@@ -1,0 +1,23 @@
+# conversation.yml - UI и поведение диалоговой системы
+hologram:
+  forward: 2.5           # как далеко вперед от игрока рисовать (в метрах)
+  height: 1.2           # высота над позицией игрока (в метрах)
+  lineSpacing: 0.25      # расстояние между строками (в метрах)
+  maxWidth: 100           # максимальная длина строки (символов)
+  fontSize: 14           # условный размер шрифта (необязательно поддерживается)
+  color: "§a"            # цвет текста (ChatColor/§-код или hex)
+  shadow: true           # тень для текста
+  forwardPush: 0       # насколько далеко расиовать от нпс/ближе к игроку
+  setBillboard: true     # привязывать ли к взгляду игрока окно
+
+options:
+  maxOptionsPerPage: 6
+  optionPrefix: ""       # префикс перед опцией (в коде не используется)
+  optionSuffix: ""       # суффикс (в коде не используется)
+  selectedColor: "§c"    # цвет выделенной опции
+  optionSpacing: 1
+  inputDelayMs: 0
+
+behavior:
+  autoCloseOnEnd: true
+  hologramLifetimeTicks: 1200   # 20 t = 1s, 1200 = 60s

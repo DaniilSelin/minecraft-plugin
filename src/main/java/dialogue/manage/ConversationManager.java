@@ -1,5 +1,6 @@
 package dialogue.manage;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -9,19 +10,23 @@ import java.util.function.Consumer;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Display;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.TextDisplay;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitTask;
 
 import com.destroystokyo.paper.event.player.PlayerJumpEvent;
 
+import load.ILoad;
 import dialogue.models.PlayerOption;
 import dialogue.store.AbstractDialogueRepository;
 import dialogue.store.session.ChoiceSession;
 import dialogue.store.session.ConversationSession;
+import dialogue.models.ConversationConfig;
 import npc.trait.ITraitManager;
 import listeners.api.ISteerVehicleHandler;
 
@@ -29,13 +34,28 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
     private final JavaPlugin plugin;
     private final AbstractDialogueRepository repo;
     private final String name = "ConversationManager";
+    private final ILoad loaderCfg;
+
+    private ConversationConfig cfg;
+
+    private final Map<String, Entity> activeEntities = new ConcurrentHashMap<>();
+    private final Map<String, BukkitTask> lookTasks = new ConcurrentHashMap<>();
 
     // active choice UI per player
     private final Map<Player, ChoiceSession> activeChoices = new ConcurrentHashMap<>();
 
-    public ConversationManager(JavaPlugin plugin, AbstractDialogueRepository repo) {
+    public ConversationManager(JavaPlugin plugin, AbstractDialogueRepository repo, ILoad loaderCfg) {
         this.plugin = plugin;
         this.repo = repo;
+        this.loaderCfg = loaderCfg;
+    }
+
+    public void loadCfg(String path) {
+        try {
+            this.cfg = (ConversationConfig) loaderCfg.load(path);
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
     }
 
     @Override
@@ -44,29 +64,50 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
     }
 
     @Override
-    public void begin(Player player, String npcName) {
+    public void begin(Player player, String npcName, Entity entity) {
         String sessionKey = npcName + "_" + player.getUniqueId().toString();
+        activeEntities.put(sessionKey, entity);
 
         // создаём сессию если её нет
         ConversationSession session = repo.ensureSessionForNpc(sessionKey, npcName);
         if (session == null) {
-            // лог и подконтрольное сообщение игроку — полезно при отладке
             plugin.getLogger().info("No dialogue for NPC: " + npcName + " (sessionKey=" + sessionKey + ")");
             player.sendMessage("§cЭтот NPC пока не разговаривает.");
+            activeEntities.remove(sessionKey);
             return;
         }
+
+        // стартуем таск, чтобы NPC смотрел на игрока
+        startLookTask(player, entity, sessionKey);
 
         showNPCReplice(sessionKey, player);
         showPlayerOption(sessionKey, player);
     }
 
-    private void endConversation(Player player, String sessionKey) {
-        // снимем UI и параметры игрока сразу (локально)
-        activeChoices.remove(player);
-        player.setWalkSpeed(0.2f);
-        player.setFlySpeed(0.1f);
+    private void startLookTask(Player player, Entity entity, String sessionKey) {
+        // пусто, не трогаем сущность, а то ерунда какая то получилась
+        // BukkitTask task = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+        //     if (entity == null || entity.isDead()) return;
+        //     Location npcLoc = entity.getLocation();
+        //     Location playerLoc = player.getLocation().clone().add(0, 1.5, 0); // чуть выше глаз
+        //     npcLoc.setDirection(playerLoc.toVector().subtract(npcLoc.toVector()).normalize());
+        //     entity.teleport(npcLoc);
+        // }, 0L, 2L); // обновляем каждые 2 тика
+        // lookTasks.put(sessionKey, task);
+    }
+    
+    private void stopLookTask(String sessionKey) {
+        BukkitTask task = lookTasks.remove(sessionKey);
+        if (task != null) task.cancel();
+        activeEntities.remove(sessionKey);
+    }
 
-        // выполняем удаление сущностей и очистку репозитория в одном sync-таске
+    private void endConversation(Player player, String sessionKey) {
+        activeChoices.remove(player);
+        stopLookTask(sessionKey);
+        player.setWalkSpeed(0.2f);
+        player.setFlySpeed(0.2f);
+
         Bukkit.getScheduler().runTask(plugin, () -> {
             List<TextDisplay> old = repo.getHologramLines(sessionKey);
             if (old != null && !old.isEmpty()) {
@@ -80,10 +121,8 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
                 }
                 repo.setHologramLines(sessionKey, null);
             }
-            // гарантированно завершить сессию (удалить состояние)
             repo.endSession(sessionKey);
 
-            // очистить actionbar
             player.sendActionBar("");
         });
     }
@@ -115,9 +154,13 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
         String text = repo.getCurrentLineText(sessionKey);
         if (text == null) return;
 
+        // Entity npc = activeEntities.get(sessionKey);
+        // if (npc == null || npc.isDead()) return;
+        // Location npcLoc = npc.getLocation();
+
         org.bukkit.util.Vector dir = player.getEyeLocation().getDirection().normalize();
-        double forward = 3.0;
-        double height = 1.5;
+        double forward = cfg.hologram.forward;
+        double height = cfg.hologram.height;
         Location baseLoc = player.getLocation().clone().add(dir.multiply(forward)).add(0, height, 0);
 
         // очистить старые дисплеи (репозиторий отдаёт их)
@@ -156,31 +199,65 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
     private void sendChoiceMessage(Player player) {
         ChoiceSession cs = activeChoices.get(player);
         if (cs == null) return;
+        ConversationConfig conf = this.cfg == null ? new ConversationConfig() : this.cfg;
+
+        String selColor = conf.options.selectedColor == null ? "§c" : toMinecraftColor(conf.options.selectedColor, "§c");
+        String normalColor = "§7";
+        String sep = " " + normalColor + "| ";
 
         StringBuilder msg = new StringBuilder();
         for (int i = 0; i < cs.SizeOption(); i++) {
             if (i == cs.getCurrentIndex()) {
-                msg.append("§c"); // выделяем красным текущую опцию
+                msg.append(selColor);
             } else {
-                msg.append("§7");
+                msg.append(normalColor);
             }
+            msg.append(conf.options.optionPrefix != null ? conf.options.optionPrefix : "");
             msg.append(cs.GetTextOp(i));
-            if (i < cs.SizeOption() - 1) {
-                msg.append(" §7| "); // разделитель между опциями
-            }
+            msg.append(conf.options.optionSuffix != null ? conf.options.optionSuffix : "");
+            if (i < cs.SizeOption() - 1) msg.append(sep);
         }
         player.sendActionBar(msg.toString());
     }
-    
-    public List<String> SplitNPCReplice(String text) {
-        List<String> splitLines = new ArrayList<>();
-        int maxLen = 35;
-        while (!text.isEmpty()) {
-            int end = Math.min(maxLen, text.length());
-            splitLines.add(text.substring(0, end));
-            text = text.substring(end);
+
+    // утилита: принимает hex (#rrggbb) или возвращает переданную секвенцию, в противном случае fallback
+    private String toMinecraftColor(String hexOr, String fallback) {
+        if (hexOr == null) return fallback;
+        String s = hexOr.trim();
+        if (s.startsWith("#") && s.length() == 7) {
+            // Bukkit/MC не имеет стандартного парсинга в §x везде — возвращаем специальную секвенцию §x§R§R... если нужно.
+            // Простая реализация: попробуем вернуть §x формат
+            try {
+                StringBuilder b = new StringBuilder("§x");
+                for (int i = 1; i < 7; i++) b.append('§').append(s.charAt(i));
+                return b.toString();
+            } catch (Throwable ignored) {}
         }
-        return splitLines;
+        return fallback;
+    }
+
+    public List<String> SplitNPCReplice(String text) {
+        List<String> lines = new ArrayList<>();
+        if (text == null) return lines;
+        text = text.strip();
+        if (text.isEmpty()) return lines;
+
+        String[] words = text.split("\\s+");
+        StringBuilder cur = new StringBuilder();
+        for (String w : words) {
+            if (cur.length() == 0) {
+                cur.append(w);
+            } else {
+                if (cur.length() + 1 + w.length() <= cfg.hologram.maxWidth) {
+                    cur.append(' ').append(w);
+                } else {
+                    lines.add(cur.toString());
+                    cur = new StringBuilder(w);
+                }
+            }
+        }
+        if (cur.length() > 0) lines.add(cur.toString());
+        return lines;
     }
 
     public List<String> FromateNPCReplice(List<String> splitLines) {
@@ -191,37 +268,59 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
         return allLines;
     }
 
-    public List<TextDisplay> CreateHologramLines(List<String> alllines, Player player, Location baseLoc) {
+    public List<TextDisplay> CreateHologramLines(List<String> alllines, Player player, Location npcLocation) {
         List<TextDisplay> newLines = new ArrayList<>();
         double yOffset = 0.0;
 
+        ConversationConfig.HologramConfig hc = (this.cfg == null) ? new ConversationConfig.HologramConfig() : this.cfg.hologram;
+        double spacing = hc.lineSpacing;
+        int lineWidth = hc.maxWidth;
+        String color = hc.color;
+        boolean shadow = hc.shadow;
+
+        final double forwardPush = hc.forwardPush;
+
         for (String lineText : alllines) {
-            Location loc = baseLoc.clone().add(0, -yOffset, 0);
+            // направление от NPC к глазам игрока
+            org.bukkit.util.Vector toPlayer = player.getEyeLocation().toVector().subtract(npcLocation.toVector());
+            if (toPlayer.lengthSquared() == 0) toPlayer = player.getLocation().getDirection();
+            toPlayer.normalize();
+
+            // позиция: немного вперед от NPC в сторону игрока + вертикальный оффсет
+            Location loc = npcLocation.clone()
+                    .add(toPlayer.multiply(forwardPush))            // смещаем вперед в сторону игрока
+                    .add(0.0, hc.height - yOffset, 0.0);             // поднимаем над головой и учитываем yOffset
 
             TextDisplay td = null;
             try {
                 td = player.getWorld().spawn(loc, TextDisplay.class, display -> {
-                    display.setText(lineText);
+                    // текст (строка)
+                    try { display.setText(lineText); } catch (Throwable ignored) {}
 
-                    // ориентация
+                    // ориентация к игроку
                     try { display.setBillboard(Display.Billboard.CENTER); } catch (Throwable ignored) {}
 
-                    // видимость и контраст
-                    try { display.setViewRange(256.0f); } catch (Throwable ignored) {}
-                    try { display.setLineWidth(200); } catch (Throwable ignored) {}
-                    try { display.setSeeThrough(true); } catch (Throwable ignored) {}
+                    // опции визуала — используем напрямую значения из cfg
+                    try { display.setLineWidth(lineWidth); } catch (Throwable ignored) {}
+                    try { display.setShadowed(shadow); } catch (Throwable ignored) {}
                     try { display.setTextOpacity((byte)255); } catch (Throwable ignored) {}
-                    try { display.setShadowed(true); } catch (Throwable ignored) {}
+                    display.setSeeThrough(true);
+                    if (hc.setBillboard) {
+                        display.setBillboard(Display.Billboard.CENTER);
+                    } 
                     try { display.setGlowing(true); } catch (Throwable ignored) {}
                     try { display.setPersistent(true); } catch (Throwable ignored) {}
                     try { display.setGravity(false); } catch (Throwable ignored) {}
+
+                    // подстраховка: если есть метод для установки цвета/компонента — не критично
+                    // (оставляем как есть, чтобы не ломаться на разных версиях)
                 });
             } catch (Throwable t) {
                 plugin.getLogger().warning("Spawn TextDisplay failed for loc " + loc + ": " + t.getMessage());
             }
 
             if (td != null) newLines.add(td);
-            yOffset += 0.25;
+            yOffset += spacing;
         }
 
         return newLines;

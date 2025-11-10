@@ -13,7 +13,7 @@ public class NpcsRoot {
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class Defaults {
-        @JsonProperty("spawnOnEnable")
+        @JsonProperty("spawn-on-enable")
         public boolean spawnOnEnable = false;
     }
 }

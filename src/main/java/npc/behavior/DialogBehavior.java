@@ -5,6 +5,7 @@ import npc.trait.ITraitManager;
 import npc.trait.Trait;
 
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Entity;
 
 import npc.trait.ManagerAware;
 
@@ -13,10 +14,12 @@ public class DialogBehavior extends Trait implements NPCBehavior, ManagerAware {
     private final String reqManager = "ConversationManager";
     private ITraitManager convManager;
     private final String npcName;
+    private Entity entity;
 
-    public DialogBehavior(TraitConfig config, String npcName) {
+    public DialogBehavior(TraitConfig config, Entity e, String npcName) {
         super(config);
         this.npcName = npcName;
+        this.entity = e;
     }
 
     @Override
@@ -27,7 +30,7 @@ public class DialogBehavior extends Trait implements NPCBehavior, ManagerAware {
     @Override
     public void onInteract(Player player) {
         if (convManager == null || npcName == "") return;
-        convManager.begin(player, npcName);
+        convManager.begin(player, npcName, entity);
     }
 
     @Override

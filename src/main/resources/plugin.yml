@@ -10,3 +10,6 @@ commands:
   loaddialogs:
     description: Загружает все диалоги и создаёт NPC
     usage: /loaddialogs
+  loadUI:
+    descryption: Загружает конфиг UI общения с NPC
+    usage: /loadUI

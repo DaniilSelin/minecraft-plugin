@@ -12,13 +12,17 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import load.impl.LoadDialogue;
 import load.impl.LoadNpcConfig;
+import cmd.LoadCfgConvCommand;
 import cmd.LoadDialogsCommand;
 import dialogue.manage.ConversationManager;
 import dialogue.store.DialogueRepository;
 import listeners.api.ISteerVehicleHandler;
 import listeners.protocol.SteerVehicleManager;
+import load.impl.LoadCfgConv;
 import npc.NpcManager;
+import npc.behavior.DialogBehavior;
 import npc.trait.ManagerRegistry;
+import npc.trait.TraitRegistry;
 
 public class CorePlugin extends JavaPlugin implements Listener {
     @Override
@@ -34,11 +38,16 @@ public class CorePlugin extends JavaPlugin implements Listener {
 
         File dialogFile = new File(dialogsDir, "dialogue.json");
 
-        LoadDialogue load = new LoadDialogue();
+        LoadDialogue loadDialogs = new LoadDialogue();
 
-        DialogueRepository repo = new DialogueRepository(dialogFile.getPath(), load);
+        DialogueRepository repo = new DialogueRepository(dialogFile.getPath(), loadDialogs);
         repo.loadDialogue();
-        ConversationManager dialogManager = new ConversationManager(this, repo);
+
+        LoadCfgConv loadCfgUI = new LoadCfgConv();
+        ConversationManager dialogManager = new ConversationManager(this, repo, loadCfgUI);
+
+        File uiCfgFile = new File(data, "cfgUI.yaml");
+        dialogManager.loadCfg(uiCfgFile.getPath());
 
         // conversationManager реализует ITraitManager
         ManagerRegistry.register(dialogManager);
@@ -46,8 +55,10 @@ public class CorePlugin extends JavaPlugin implements Listener {
         getServer().getPluginManager().registerEvents(dialogManager, this);
 
         LoadDialogsCommand loadCommand = new LoadDialogsCommand(repo);
+        LoadCfgConvCommand loadCfgUICommand = new LoadCfgConvCommand(dialogManager, uiCfgFile.getPath());
 
         getCommand("loaddialogs").setExecutor(loadCommand);
+        getCommand("loadUI").setExecutor(loadCfgUICommand);
 
         // регистрируем слушателей пакетов
         List<ISteerVehicleHandler> handlers = new ArrayList<>();
@@ -60,6 +71,9 @@ public class CorePlugin extends JavaPlugin implements Listener {
         );
 
         steerVehicleManager.registerSteerVehicleListener(this, handlers);
+
+        TraitRegistry.register("DialogBehavior", (entity, cfg) -> new DialogBehavior(cfg, entity, entity.getCustomName()));
+        TraitRegistry.register("dialogbehavior", (entity, cfg) -> new DialogBehavior(cfg, entity, entity.getCustomName())); // дубль — на всякий
 
         LoadNpcConfig loadNPC = new LoadNpcConfig();
         File npcFile = new File(data, "config.yaml");

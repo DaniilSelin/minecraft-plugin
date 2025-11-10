@@ -1,0 +1,30 @@
+# npcs.yml
+npcs:
+  - id: 1
+    name: IvanIvanovich
+    type: VILLAGER
+    location:
+      world: world
+      x: 96.0
+      y: 80.0
+      z: 274.3
+      yaw: 0.0
+      pitch: 0.0
+    traits:
+      - type: dialog
+
+  - id: 2
+    name: DaniilDaniilovich
+    type: ZOMBIE
+    location:
+      world: world_nether
+      x: -10.5
+      y: 65.0
+      z: 48.0
+      yaw: 90.0
+      pitch: 0.0
+    
+
+# опционально: глобальные параметры
+defaults:
+  spawn-on-enable: true

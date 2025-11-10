@@ -1,4 +1,4 @@
-package npc;
+package npc.behavior;
 
 import org.bukkit.entity.Player;
 

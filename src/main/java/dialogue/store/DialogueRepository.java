@@ -1,6 +1,5 @@
 package dialogue.store;
 
-import dialogue.api.ILoadDialogue;
 import dialogue.models.Dialogue;
 import dialogue.models.DialogueLine;
 import dialogue.models.DialogueStage;
@@ -10,6 +9,8 @@ import dialogue.store.session.ConversationSession;
 
 import org.bukkit.entity.Player;
 
+import load.ILoad;
+
 import java.io.IOException;
 import java.util.Map;
 import java.util.List;
@@ -18,7 +19,7 @@ import java.util.UUID;
 
 public class DialogueRepository extends AbstractDialogueRepository {
     private final String basePath;
-    private final ILoadDialogue loader;
+    private final ILoad<dialogue.models.Dialogue> loader;
 
     // TODO: ПОСЛЕ РЕАЛИЗАЦИИ НПС НОРМВАЛЬНО СДЕЛАТЬ БЯЛТЬ
     // protected Map<String, Dialogue> dialogues = new ConcurrentHashMap<>();
@@ -27,7 +28,7 @@ public class DialogueRepository extends AbstractDialogueRepository {
     // активные выборы (временный, можно хранить UUID вместо Player)
     private final Map<UUID, ChoiceSession> activeChoices = new ConcurrentHashMap<>();
 
-    public DialogueRepository(String basePath, ILoadDialogue loader) {
+    public DialogueRepository(String basePath, ILoad loader) {
         this.basePath = basePath;
         this.loader = loader;
     }

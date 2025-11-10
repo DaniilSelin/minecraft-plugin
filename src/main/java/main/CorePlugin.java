@@ -4,27 +4,21 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.bukkit.Bukkit;
-import org.bukkit.Location;
-import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import load.impl.LoadDialogue;
+import load.impl.LoadNpcConfig;
 import cmd.LoadDialogsCommand;
-import dialogue.api.impl.LoadDialogue;
 import dialogue.manage.ConversationManager;
 import dialogue.store.DialogueRepository;
 import listeners.api.ISteerVehicleHandler;
 import listeners.protocol.SteerVehicleManager;
-import net.citizensnpcs.api.CitizensAPI;
-import net.citizensnpcs.api.event.NPCRightClickEvent;
-import net.citizensnpcs.api.npc.NPC;
-import net.citizensnpcs.api.trait.Trait;
-import npc.DialogBehavior;
-import npc.NPCBehavior;
+import npc.NpcManager;
+import npc.trait.ManagerRegistry;
 
 public class CorePlugin extends JavaPlugin implements Listener {
     @Override
@@ -45,6 +39,10 @@ public class CorePlugin extends JavaPlugin implements Listener {
         DialogueRepository repo = new DialogueRepository(dialogFile.getPath(), load);
         repo.loadDialogue();
         ConversationManager dialogManager = new ConversationManager(this, repo);
+
+        // conversationManager реализует ITraitManager
+        ManagerRegistry.register(dialogManager);
+
         getServer().getPluginManager().registerEvents(dialogManager, this);
 
         LoadDialogsCommand loadCommand = new LoadDialogsCommand(repo);
@@ -63,15 +61,13 @@ public class CorePlugin extends JavaPlugin implements Listener {
 
         steerVehicleManager.registerSteerVehicleListener(this, handlers);
 
-        // Создаём нового NPC
-        String name = "Ivan";
-        NPC ivan = CitizensAPI.getNPCRegistry().createNPC(EntityType.VILLAGER, name);
-        DialogBehavior dialogueTrait = new DialogBehavior(dialogManager, dialogFile.getPath(), name);
+        LoadNpcConfig loadNPC = new LoadNpcConfig();
+        File npcFile = new File(data, "config.yaml");
+        NpcManager npcManager = new NpcManager(this, npcFile.getPath(), loadNPC); 
+        getServer().getPluginManager().registerEvents(npcManager, this);
 
-        ivan.addTrait(dialogueTrait);
-
-        Location spawnLocation = Bukkit.getWorlds().get(0).getSpawnLocation();
-        ivan.spawn(spawnLocation);
+        npcManager.loadConfigs();
+        npcManager.applyAll(true);
     }
 
     @Override
@@ -88,17 +84,5 @@ public class CorePlugin extends JavaPlugin implements Listener {
                 "§eтеперь ты... §kлох",
                 10, 70, 20
         );
-    }
-
-    @EventHandler
-    public void onNPCRightClick(NPCRightClickEvent event) {
-        NPC clicked = event.getNPC();
-        if (clicked == null) return;
-
-        for (Trait trait : clicked.getTraits()) {
-            if (trait instanceof NPCBehavior behavior) {
-                behavior.onRightClick(event.getClicker());
-            }
-        }
     }
 }

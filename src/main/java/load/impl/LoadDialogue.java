@@ -1,13 +1,13 @@
-package dialogue.api.impl;
+package load.impl;
 
-import dialogue.api.ILoadDialogue;
+import load.ILoad;
 import dialogue.models.Dialogue;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.File;
 import java.io.IOException;
 
-public class LoadDialogue implements ILoadDialogue {
+public class LoadDialogue implements ILoad {
     @Override
     public Dialogue load(String path) throws IOException {
         ObjectMapper mapper = new ObjectMapper();

@@ -22,11 +22,13 @@ import dialogue.models.PlayerOption;
 import dialogue.store.AbstractDialogueRepository;
 import dialogue.store.session.ChoiceSession;
 import dialogue.store.session.ConversationSession;
+import npc.trait.ITraitManager;
 import listeners.api.ISteerVehicleHandler;
 
-public class ConversationManager implements Listener, ISteerVehicleHandler {
+public class ConversationManager implements Listener, ISteerVehicleHandler, ITraitManager {
     private final JavaPlugin plugin;
     private final AbstractDialogueRepository repo;
+    private final String name = "ConversationManager";
 
     // active choice UI per player
     private final Map<Player, ChoiceSession> activeChoices = new ConcurrentHashMap<>();
@@ -36,7 +38,13 @@ public class ConversationManager implements Listener, ISteerVehicleHandler {
         this.repo = repo;
     }
 
-    public void beginConversation(Player player, String npcName) {
+    @Override
+    public String getName() {
+        return name;
+    }
+
+    @Override
+    public void begin(Player player, String npcName) {
         String sessionKey = npcName + "_" + player.getUniqueId().toString();
 
         // создаём сессию если её нет

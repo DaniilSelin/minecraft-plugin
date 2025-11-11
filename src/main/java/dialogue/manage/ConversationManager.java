@@ -148,25 +148,31 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
         });
     }
 
+    // showNPCReplice: вычисляем базовую локацию от NPC если есть, иначе от игрока (fallback)
     public void showNPCReplice(String sessionKey, Player player) {
-        // строка теперь берётся через repo
         if (!repo.checkSession(sessionKey)) return;
         String text = repo.getCurrentLineText(sessionKey);
         if (text == null) return;
 
-        // Entity npc = activeEntities.get(sessionKey);
-        // if (npc == null || npc.isDead()) return;
-        // Location npcLoc = npc.getLocation();
+        // попробуем взять NPC из activeEntities
+        Entity npc = activeEntities.get(sessionKey);
+        Location baseLoc;
+        if (npc != null && !npc.isDead()) {
+            // над головой NPC
+            baseLoc = npc.getLocation().clone().add(0, (this.cfg == null ? new ConversationConfig().hologram.height : this.cfg.hologram.height), 0);
+        } else {
+            // fallback: позиция перед игроком как раньше
+            org.bukkit.util.Vector dir = player.getEyeLocation().getDirection().normalize();
+            double forward = (this.cfg == null ? new ConversationConfig().hologram.forward : this.cfg.hologram.forward);
+            double height = (this.cfg == null ? new ConversationConfig().hologram.height : this.cfg.hologram.height);
+            baseLoc = player.getLocation().clone().add(dir.multiply(forward)).add(0, height, 0);
+        }
 
-        org.bukkit.util.Vector dir = player.getEyeLocation().getDirection().normalize();
-        double forward = cfg.hologram.forward;
-        double height = cfg.hologram.height;
-        Location baseLoc = player.getLocation().clone().add(dir.multiply(forward)).add(0, height, 0);
-
-        // очистить старые дисплеи (репозиторий отдаёт их)
+        // очистить старые дисплеи
         List<TextDisplay> old = repo.getHologramLines(sessionKey);
         if (old != null) {
-            removeHologramLines(this.plugin, old);
+            // если старые были созданы для этого игрока, спрячем у игрока и удалим
+            removeHologramLinesForPlayer(this.plugin, old, player);
             repo.setHologramLines(sessionKey, null);
         }
 
@@ -176,7 +182,6 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
         Bukkit.getScheduler().runTask(plugin, () -> {
             try {
                 List<TextDisplay> newLines = CreateHologramLines(allLines, player, baseLoc);
-                // репозиторий теперь хранит ссылки на созданные дисплеи
                 repo.setHologramLines(sessionKey, newLines);
                 repo.setLastDisplayedText(sessionKey, String.join("\n", allLines));
             } catch (Throwable t) {
@@ -185,6 +190,7 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
             }
         });
     }
+
 
     // --- выбор/UI ---
     private void startChoice(Player player, List<PlayerOption> options, Consumer<Integer> onSelect) {
@@ -275,46 +281,48 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
         ConversationConfig.HologramConfig hc = (this.cfg == null) ? new ConversationConfig.HologramConfig() : this.cfg.hologram;
         double spacing = hc.lineSpacing;
         int lineWidth = hc.maxWidth;
-        String color = hc.color;
         boolean shadow = hc.shadow;
 
-        final double forwardPush = hc.forwardPush;
-
         for (String lineText : alllines) {
-            // направление от NPC к глазам игрока
-            org.bukkit.util.Vector toPlayer = player.getEyeLocation().toVector().subtract(npcLocation.toVector());
-            if (toPlayer.lengthSquared() == 0) toPlayer = player.getLocation().getDirection();
-            toPlayer.normalize();
+            // direction: от глаза игрока к NPC
+            org.bukkit.util.Vector dirPlayerToNpc = npcLocation.toVector().subtract(player.getEyeLocation().toVector());
+            if (dirPlayerToNpc.lengthSquared() == 0) dirPlayerToNpc = player.getLocation().getDirection();
+            dirPlayerToNpc = dirPlayerToNpc.normalize();
 
-            // позиция: немного вперед от NPC в сторону игрока + вертикальный оффсет
+            // offsetTowardsPlayer — сколько блоков сместить текст от головы NPC в сторону игрока
+            // маленькое положительное значение: 0.25..0.6 — настраивай
+            double offsetTowardsPlayer = 0.35;
+
+            // если далеко — можно смещать больше (опционально)
+            double distance = npcLocation.distance(player.getEyeLocation());
+            if (distance > 10.0) offsetTowardsPlayer = Math.min(1.0, distance * 0.06);
+
+            // теперь позиция: над головой NPC, но смещена *в сторону игрока*
             Location loc = npcLocation.clone()
-                    .add(toPlayer.multiply(forwardPush))            // смещаем вперед в сторону игрока
-                    .add(0.0, hc.height - yOffset, 0.0);             // поднимаем над головой и учитываем yOffset
+                    .add(dirPlayerToNpc.multiply(-offsetTowardsPlayer)) // <- минус: двигаем ТЕКСТ ТУДА, ОТ NPC, в сторону игрока
+                    .add(0.0, hc.height - yOffset, 0.0);
+
 
             TextDisplay td = null;
             try {
-                td = player.getWorld().spawn(loc, TextDisplay.class, display -> {
-                    // текст (строка)
+                td = npcLocation.getWorld().spawn(loc, TextDisplay.class, display -> {
                     try { display.setText(lineText); } catch (Throwable ignored) {}
-
-                    // ориентация к игроку
                     try { display.setBillboard(Display.Billboard.CENTER); } catch (Throwable ignored) {}
-
-                    // опции визуала — используем напрямую значения из cfg
                     try { display.setLineWidth(lineWidth); } catch (Throwable ignored) {}
                     try { display.setShadowed(shadow); } catch (Throwable ignored) {}
                     try { display.setTextOpacity((byte)255); } catch (Throwable ignored) {}
-                    display.setSeeThrough(true);
-                    if (hc.setBillboard) {
-                        display.setBillboard(Display.Billboard.CENTER);
-                    } 
+                    try { display.setSeeThrough(true); } catch (Throwable ignored) {}
                     try { display.setGlowing(true); } catch (Throwable ignored) {}
                     try { display.setPersistent(true); } catch (Throwable ignored) {}
                     try { display.setGravity(false); } catch (Throwable ignored) {}
-
-                    // подстраховка: если есть метод для установки цвета/компонента — не критично
-                    // (оставляем как есть, чтобы не ломаться на разных версиях)
+                    try { display.setVisibleByDefault(false); } catch (Throwable ignored) {} // скрываем по умолчанию
                 });
+
+                if (td != null) {
+                    try { player.showEntity(plugin, td); } catch (Throwable ex) {
+                        plugin.getLogger().warning("player.showEntity failed: " + ex.getMessage());
+                    }
+                }
             } catch (Throwable t) {
                 plugin.getLogger().warning("Spawn TextDisplay failed for loc " + loc + ": " + t.getMessage());
             }
@@ -326,16 +334,24 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
         return newLines;
     }
 
-    private void removeHologramLines(JavaPlugin plugin, List<TextDisplay> lines) {
+
+    // вспомогательная функция для корректного удаления голограмм у игрока перед remove()
+    private void removeHologramLinesForPlayer(JavaPlugin plugin, List<TextDisplay> lines, Player player) {
         if (lines == null) return;
         Bukkit.getScheduler().runTask(plugin, () -> {
             for (TextDisplay td : lines) {
-                if (td != null && !td.isDead()) {
+                if (td == null || td.isDead()) continue;
+                try {
+                    // сначала скрыть у игрока (если показывали через showEntity)
+                    try { player.hideEntity(plugin, td); } catch (Throwable ignored) {}
                     td.remove();
+                } catch (Throwable t) {
+                    plugin.getLogger().warning("Failed to remove TextDisplay: " + t.getMessage());
                 }
             }
         });
     }
+
 
     @Override
     public void handleSteerVehicle(Player player, boolean forward, boolean backward, boolean jump) {

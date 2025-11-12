@@ -65,6 +65,7 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
 
     @Override
     public void begin(Player player, String npcName, Entity entity) {
+        cleanupPlayerSessions(player);
         String sessionKey = npcName + "_" + player.getUniqueId().toString();
         activeEntities.put(sessionKey, entity);
 
@@ -154,7 +155,6 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
         String text = repo.getCurrentLineText(sessionKey);
         if (text == null) return;
 
-        // попробуем взять NPC из activeEntities
         Entity npc = activeEntities.get(sessionKey);
         Location baseLoc;
         if (npc != null && !npc.isDead()) {
@@ -170,27 +170,120 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
 
         // очистить старые дисплеи
         List<TextDisplay> old = repo.getHologramLines(sessionKey);
-        if (old != null) {
-            // если старые были созданы для этого игрока, спрячем у игрока и удалим
-            removeHologramLinesForPlayer(this.plugin, old, player);
-            repo.setHologramLines(sessionKey, null);
-        }
-
         List<String> splitLines = SplitNPCReplice(text.isEmpty() ? "TEST DISPLAY" : text);
         List<String> allLines = FromateNPCReplice(splitLines);
 
         Bukkit.getScheduler().runTask(plugin, () -> {
             try {
+                if (old != null && !old.isEmpty()) {
+                    for (TextDisplay td : old) {
+                        if (td == null || td.isDead()) continue;
+                        try {
+                            try { player.hideEntity(plugin, td); } catch (Throwable ignored) {}
+                            td.remove();
+                        } catch (Throwable t) {
+                            plugin.getLogger().warning("Failed to remove old TextDisplay: " + t.getMessage());
+                        }
+                    }
+                }
+                repo.setHologramLines(sessionKey, null);
                 List<TextDisplay> newLines = CreateHologramLines(allLines, player, baseLoc);
                 repo.setHologramLines(sessionKey, newLines);
                 repo.setLastDisplayedText(sessionKey, String.join("\n", allLines));
+                plugin.getLogger().info("Created holograms: " + (newLines == null ? 0 : newLines.size()) + " for " + sessionKey);
+
+                // 4) теперь показываем их игроку и логируем showEntity ошибки
+                if (newLines != null) {
+                    for (TextDisplay td : newLines) {
+                        try {
+                            if (td == null || td.isDead()) continue;
+                            player.showEntity(plugin, td);
+                            plugin.getLogger().info("Shown textdisplay id=" + td.getUniqueId() + " to player=" + player.getName());
+                        } catch (Throwable ex) {
+                            plugin.getLogger().warning("player.showEntity failed id=" + (td == null ? "null" : td.getUniqueId()) + ": " + ex.getMessage());
+                        }
+                    }
+                }
             } catch (Throwable t) {
-                plugin.getLogger().severe("Failed to create TextDisplays: " + t.getMessage());
+                plugin.getLogger().severe("showNPCReplice failed: " + t.getMessage());
                 t.printStackTrace();
             }
         });
     }
 
+    public List<TextDisplay> CreateHologramLines(List<String> alllines, Player player, Location npcLocation) {
+        List<TextDisplay> newLines = new ArrayList<>();
+        double yOffset = 0.0;
+
+        ConversationConfig.HologramConfig hc = (this.cfg == null || this.cfg.hologram == null) ? new ConversationConfig.HologramConfig() : this.cfg.hologram;
+        double spacing = hc.lineSpacing;
+        int lineWidth = hc.maxWidth;
+        boolean shadow = hc.shadow;
+
+        for (String lineText : alllines) {
+            org.bukkit.util.Vector dirPlayerToNpc = npcLocation.toVector().subtract(player.getEyeLocation().toVector());
+            if (dirPlayerToNpc.lengthSquared() == 0) dirPlayerToNpc = player.getLocation().getDirection();
+            dirPlayerToNpc = dirPlayerToNpc.normalize();
+
+            double offsetTowardsPlayer = 0.35;
+            double distance = Math.max(0.0, npcLocation.distance(player.getEyeLocation()));
+            if (distance > 10.0) offsetTowardsPlayer = Math.min(1.0, distance * 0.06);
+
+            Location loc = npcLocation.clone()
+                    .add(dirPlayerToNpc.multiply(-offsetTowardsPlayer))
+                    .add(0.0, hc.height - yOffset, 0.0);
+
+            TextDisplay td = null;
+            try {
+                td = npcLocation.getWorld().spawn(loc, TextDisplay.class, display -> {
+                    try { display.setText(lineText); } catch (Throwable ignored) {}
+                    try { display.setBillboard(Display.Billboard.CENTER); } catch (Throwable ignored) {}
+                    try { display.setLineWidth(lineWidth); } catch (Throwable ignored) {}
+                    try { display.setShadowed(shadow); } catch (Throwable ignored) {}
+                    try { display.setTextOpacity((byte)255); } catch (Throwable ignored) {}
+                    try { display.setSeeThrough(true); } catch (Throwable ignored) {}
+                    try { display.setGlowing(true); } catch (Throwable ignored) {}
+                    try { display.setPersistent(true); } catch (Throwable ignored) {}
+                    try { display.setGravity(false); } catch (Throwable ignored) {}
+                    try { display.setVisibleByDefault(false); } catch (Throwable ignored) {} // скрываем по умолчанию
+                });
+
+                if (td != null) {
+                    newLines.add(td);
+                    plugin.getLogger().fine("Spawned TextDisplay id=" + td.getUniqueId() + " at " + loc);
+                }
+            } catch (Throwable t) {
+                plugin.getLogger().warning("Spawn TextDisplay failed for loc " + loc + ": " + t.getMessage());
+            }
+
+            yOffset += spacing;
+        }
+
+        return newLines;
+    }
+
+        // 4) вспомогательная жёсткая очистка ближайших TextDisplay (ловит осиротевшие первые линии)
+    private void removeNearbyTextDisplays(Location loc, double radius) {
+        if (loc == null) return;
+        try {
+            int removed = 0;
+            for (Entity e : loc.getWorld().getNearbyEntities(loc, radius, radius, radius)) {
+                if (!(e instanceof TextDisplay)) continue;
+                TextDisplay td = (TextDisplay) e;
+                try {
+                    if (td.isDead()) continue;
+                    td.remove();
+                    removed++;
+                    plugin.getLogger().info("Removed stray TextDisplay id=" + td.getUniqueId() + " near " + loc);
+                } catch (Throwable t) {
+                    plugin.getLogger().warning("Failed to remove stray TextDisplay: " + t.getMessage());
+                }
+            }
+            if (removed > 0) plugin.getLogger().info("removeNearbyTextDisplays removed " + removed + " entities");
+        } catch (Throwable t) {
+            plugin.getLogger().warning("removeNearbyTextDisplays failed: " + t.getMessage());
+        }
+    }
 
     // --- выбор/UI ---
     private void startChoice(Player player, List<PlayerOption> options, Consumer<Integer> onSelect) {
@@ -231,8 +324,6 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
         if (hexOr == null) return fallback;
         String s = hexOr.trim();
         if (s.startsWith("#") && s.length() == 7) {
-            // Bukkit/MC не имеет стандартного парсинга в §x везде — возвращаем специальную секвенцию §x§R§R... если нужно.
-            // Простая реализация: попробуем вернуть §x формат
             try {
                 StringBuilder b = new StringBuilder("§x");
                 for (int i = 1; i < 7; i++) b.append('§').append(s.charAt(i));
@@ -274,66 +365,30 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
         return allLines;
     }
 
-    public List<TextDisplay> CreateHologramLines(List<String> alllines, Player player, Location npcLocation) {
-        List<TextDisplay> newLines = new ArrayList<>();
-        double yOffset = 0.0;
-
-        ConversationConfig.HologramConfig hc = (this.cfg == null) ? new ConversationConfig.HologramConfig() : this.cfg.hologram;
-        double spacing = hc.lineSpacing;
-        int lineWidth = hc.maxWidth;
-        boolean shadow = hc.shadow;
-
-        for (String lineText : alllines) {
-            // direction: от глаза игрока к NPC
-            org.bukkit.util.Vector dirPlayerToNpc = npcLocation.toVector().subtract(player.getEyeLocation().toVector());
-            if (dirPlayerToNpc.lengthSquared() == 0) dirPlayerToNpc = player.getLocation().getDirection();
-            dirPlayerToNpc = dirPlayerToNpc.normalize();
-
-            // offsetTowardsPlayer — сколько блоков сместить текст от головы NPC в сторону игрока
-            // маленькое положительное значение: 0.25..0.6 — настраивай
-            double offsetTowardsPlayer = 0.35;
-
-            // если далеко — можно смещать больше (опционально)
-            double distance = npcLocation.distance(player.getEyeLocation());
-            if (distance > 10.0) offsetTowardsPlayer = Math.min(1.0, distance * 0.06);
-
-            // теперь позиция: над головой NPC, но смещена *в сторону игрока*
-            Location loc = npcLocation.clone()
-                    .add(dirPlayerToNpc.multiply(-offsetTowardsPlayer)) // <- минус: двигаем ТЕКСТ ТУДА, ОТ NPC, в сторону игрока
-                    .add(0.0, hc.height - yOffset, 0.0);
-
-
-            TextDisplay td = null;
-            try {
-                td = npcLocation.getWorld().spawn(loc, TextDisplay.class, display -> {
-                    try { display.setText(lineText); } catch (Throwable ignored) {}
-                    try { display.setBillboard(Display.Billboard.CENTER); } catch (Throwable ignored) {}
-                    try { display.setLineWidth(lineWidth); } catch (Throwable ignored) {}
-                    try { display.setShadowed(shadow); } catch (Throwable ignored) {}
-                    try { display.setTextOpacity((byte)255); } catch (Throwable ignored) {}
-                    try { display.setSeeThrough(true); } catch (Throwable ignored) {}
-                    try { display.setGlowing(true); } catch (Throwable ignored) {}
-                    try { display.setPersistent(true); } catch (Throwable ignored) {}
-                    try { display.setGravity(false); } catch (Throwable ignored) {}
-                    try { display.setVisibleByDefault(false); } catch (Throwable ignored) {} // скрываем по умолчанию
-                });
-
-                if (td != null) {
-                    try { player.showEntity(plugin, td); } catch (Throwable ex) {
-                        plugin.getLogger().warning("player.showEntity failed: " + ex.getMessage());
-                    }
-                }
-            } catch (Throwable t) {
-                plugin.getLogger().warning("Spawn TextDisplay failed for loc " + loc + ": " + t.getMessage());
-            }
-
-            if (td != null) newLines.add(td);
-            yOffset += spacing;
+    private void cleanupPlayerSessions(Player player) {
+        String suffix = "_" + player.getUniqueId().toString();
+        List<String> toCleanup = new ArrayList<>();
+        for (String key : new ArrayList<>(activeEntities.keySet())) {
+            if (key.endsWith(suffix)) toCleanup.add(key);
         }
 
-        return newLines;
-    }
+        for (String key : toCleanup) {
+            BukkitTask t = lookTasks.remove(key);
+            if (t != null) t.cancel();
 
+            List<TextDisplay> old = repo.getHologramLines(key);
+            if (old != null && !old.isEmpty()) {
+                removeHologramLinesForPlayer(this.plugin, old, player);
+                repo.setHologramLines(key, null);
+                plugin.getLogger().info("Cleanup: removed " + old.size() + " holograms for session " + key);
+            }
+
+            repo.endSession(key);
+            activeEntities.remove(key);
+        }
+        
+        activeChoices.remove(player);
+    }
 
     // вспомогательная функция для корректного удаления голограмм у игрока перед remove()
     private void removeHologramLinesForPlayer(JavaPlugin plugin, List<TextDisplay> lines, Player player) {
@@ -352,7 +407,6 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
         });
     }
 
-
     @Override
     public void handleSteerVehicle(Player player, boolean forward, boolean backward, boolean jump) {
         ChoiceSession cs = activeChoices.get(player);
@@ -364,7 +418,6 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
             cs.next();
             sendChoiceMessage(player);
         } else if (jump) {
-            // Подтверждаем выбор: сохраняем индекс и сразу удаляем сессию выбора
             Bukkit.getScheduler().runTask(plugin, () -> {
                 int sel = cs.getCurrentIndex();
                 activeChoices.remove(player); // снимаем UI

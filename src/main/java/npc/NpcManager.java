@@ -145,4 +145,69 @@ public final class NpcManager implements Listener {
         handleInteract(clicked, ev.getPlayer());
         ev.setCancelled(true);
     }
+
+    // респавн непися
+    public Entity respawnNpcAt(int npcId, Location loc, boolean forceSpawn) {
+        NpcConfig cfg = configs.get(npcId);
+        if (cfg == null) {
+            plugin.getLogger().warning("respawnNpcAt: no npc config for id=" + npcId);
+            return null;
+        }
+        if (loc == null) {
+            loc = (cfg.location == null) ? null : cfg.location.toBukkitLocation(plugin);
+            if (loc == null) {
+                plugin.getLogger().warning("respawnNpcAt: no location provided and config has no location for id=" + npcId);
+                return null;
+            }
+        }
+
+        Entity existing = findEntityByName(cfg.name);
+        if (existing != null) {
+            if (!forceSpawn) {
+                plugin.getLogger().info("respawnNpcAt: entity already exists for id=" + npcId + ", skipping spawn");
+                return existing;
+            }
+            detachAll(existing);
+            try {
+                if (!existing.isDead()) existing.remove();
+            } catch (Throwable t) {
+                plugin.getLogger().warning("respawnNpcAt: failed to remove existing entity: " + t.getMessage());
+            }
+        }
+
+        Entity spawned;
+        try {
+            spawned = loc.getWorld().spawnEntity(loc, cfg.type == null ? EntityType.VILLAGER : cfg.type);
+        } catch (Throwable t) {
+            plugin.getLogger().severe("respawnNpcAt: spawn failed for id=" + npcId + ": " + t.getMessage());
+            return null;
+        }
+
+        if (spawned instanceof org.bukkit.entity.LivingEntity le) {
+            try { le.setCustomName(cfg.name); } catch (Throwable ignored) {}
+            try { le.setCustomNameVisible(true); } catch (Throwable ignored) {}
+            try { le.setInvulnerable(true); } catch (Throwable ignored) {}
+        }
+
+        List<Trait> traitsList = new ArrayList<>();
+        if (cfg.traits != null) {
+            for (npc.models.TraitConfig tc : cfg.traits) {
+                Trait t = TraitRegistry.create(tc.type, spawned, tc);
+                if (t == null) {
+                    plugin.getLogger().warning("NpcManager: unknown trait '" + tc.type + "' for npc " + cfg.name);
+                    continue;
+                }
+                if (t instanceof ManagerAware ma) {
+                    ITraitManager mgr = ManagerRegistry.get(ma.getReqManager());
+                    if (mgr != null) ma.setManager(mgr);
+                    else plugin.getLogger().warning("NpcManager: required manager '" + ma.getReqManager() + "' not found for trait '" + tc.type + "'");
+                }
+                traitsList.add(t);
+            }
+        }
+
+        attached.put(spawned.getUniqueId(), traitsList);
+        plugin.getLogger().info("respawnNpcAt: spawned npc id=" + npcId + " name=" + cfg.name + " uuid=" + spawned.getUniqueId());
+        return spawned;
+    }
 }

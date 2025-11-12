@@ -16,7 +16,7 @@ public abstract class AbstractDialogueRepository {
     protected final Map<String, Dialogue> dialogues = new ConcurrentHashMap<>();
     protected final Map<String, ConversationSession> activeSessions = new ConcurrentHashMap<>();
 
-    public abstract void loadDialogue();
+    public abstract void loadDialogues();
     // public abstract void saveDialogue(Dialogue dialogue);
     protected abstract DialogueStage getStage(String sessionKey);
     public abstract DialogueLine getCurrentLine(String sessionKey);
@@ -24,15 +24,15 @@ public abstract class AbstractDialogueRepository {
         DialogueLine line = getCurrentLine(sessionKey);
         return (line == null || line.text == null) ? "" : line.text;
     }
-    protected abstract Dialogue findDialogueIdByNpcName(String npcName);
+    protected abstract Dialogue findDialogueIdByNpcName(String ncpName);
 
     public boolean checkSession(String sessionKey) { return activeSessions.containsKey(sessionKey); }
     protected ConversationSession getSession(String sessionKey) { return activeSessions.get(sessionKey); }
     public void endSession(String sessionKey) { activeSessions.remove(sessionKey); }
 
-    public ConversationSession createSession(String sessionKey, Dialogue d, String npcName) {
+    public ConversationSession createSession(String sessionKey, Dialogue d, String ncpName) {
         if (d == null) return null;
-        ConversationSession s = new ConversationSession(d, npcName);
+        ConversationSession s = new ConversationSession(d, ncpName);
         activeSessions.put(sessionKey, s);
         return s;
     }
@@ -58,11 +58,11 @@ public abstract class AbstractDialogueRepository {
         if (s != null) s.setLastDisplayedText(text);
     }
 
-    public ConversationSession ensureSessionForNpc(String sessionKey, String npcName) {
+    public ConversationSession ensureSessionForNpc(String sessionKey, String ncpName) {
         if (checkSession(sessionKey)) return getSession(sessionKey);
-        Dialogue dialogue = findDialogueIdByNpcName(npcName);
+        Dialogue dialogue = findDialogueIdByNpcName(ncpName);
         if (dialogue == null) return null;
-        return createSession(sessionKey, dialogue, npcName);
+        return createSession(sessionKey, dialogue, ncpName);
     }
 
     public List<PlayerOption> getOptionsWithContinue(String sessionKey) {

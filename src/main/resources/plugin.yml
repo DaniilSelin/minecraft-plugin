@@ -13,3 +13,9 @@ commands:
   loadUI:
     descryption: Загружает конфиг UI общения с NPC
     usage: /loadUI
+  loadCfgNPC:
+    description: Загружает конифгурацию npc
+    usage: loadCfgNPC
+  respnnpc:
+    description: Респавнит нпс по ID из config.yaml
+    usage: /respnnpc

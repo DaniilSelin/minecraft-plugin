@@ -1,21 +1,22 @@
 package cmd;
 
-import dialogue.store.AbstractDialogueRepository;
+import npc.NpcManager;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 
-public class LoadDialogsCommand implements CommandExecutor {
-    private final AbstractDialogueRepository repo;
+public class LoadNPCConfigCommand implements CommandExecutor {
+    private final NpcManager manage;
 
-    public LoadDialogsCommand(AbstractDialogueRepository repo) {
-        this.repo = repo;
+    public LoadNPCConfigCommand(NpcManager manage) {
+        this.manage = manage;
     }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         try {
-            repo.loadDialogues();
+            manage.loadConfigs();
+            manage.applyAll(true);
         } catch (Exception e) {
             sender.sendMessage("§cОшибка при загрузке: " + e.getMessage());
         }

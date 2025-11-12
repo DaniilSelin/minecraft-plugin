@@ -34,7 +34,7 @@ public class DialogBehavior extends Trait implements NPCBehavior, ManagerAware {
             return;
         }
         if (npcName == null || npcName.isEmpty()) {
-            System.out.println("[DialogBehavior] npcName is empty or null for entity=" + entity);
+            System.out.println("[DialogBehavior] npcID is empty or null for entity=" + entity);
             return;
         }
         convManager.begin(player, npcName, entity);

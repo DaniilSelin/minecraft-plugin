@@ -19,11 +19,10 @@ import java.util.UUID;
 
 public class DialogueRepository extends AbstractDialogueRepository {
     private final String basePath;
-    private final ILoad<dialogue.models.Dialogue> loader;
+    private final ILoad<Map<String,Dialogue>> loader;
 
     // TODO: ПОСЛЕ РЕАЛИЗАЦИИ НПС НОРМВАЛЬНО СДЕЛАТЬ БЯЛТЬ
-    // protected Map<String, Dialogue> dialogues = new ConcurrentHashMap<>();
-    private Dialogue dialogues;    
+    protected Map<String, Dialogue> dialogues = new ConcurrentHashMap<>();
 
     // активные выборы (временный, можно хранить UUID вместо Player)
     private final Map<UUID, ChoiceSession> activeChoices = new ConcurrentHashMap<>();
@@ -34,9 +33,8 @@ public class DialogueRepository extends AbstractDialogueRepository {
     }
 
     @Override
-    public void loadDialogue() {
+    public void loadDialogues() {
         try {
-            // TODO: ПОСЛЕ РЕАЛИЗАЦИИ НПС НОРМВАЛЬНО СДЕЛАТЬ БЯЛТЬ
             dialogues = loader.load(basePath);
         } catch (IOException e) {
             System.err.println("[DialogueRepository] failed to load dialogue :" + e.getMessage());
@@ -44,10 +42,8 @@ public class DialogueRepository extends AbstractDialogueRepository {
     }
 
     @Override
-    protected Dialogue findDialogueIdByNpcName(String npcName) {
-        // TODO:
-        // return dialogues.get(npcName);
-        return this.dialogues;
+    protected Dialogue findDialogueIdByNpcName(String ncpName) {
+        return dialogues.get(ncpName);
     }
 
     @Override
@@ -78,9 +74,9 @@ public class DialogueRepository extends AbstractDialogueRepository {
         activeChoices.remove(player.getUniqueId());
     }
 
-    public ConversationSession createSessionForNpc(String sessionKey, String npcName) {
-        Dialogue dialogue = findDialogueIdByNpcName(npcName);
+    public ConversationSession createSessionForNpc(String sessionKey, String ncpName) {
+        Dialogue dialogue = findDialogueIdByNpcName(ncpName);
         if (dialogue == null) return null;
-        return createSession(sessionKey, dialogue, npcName);
+        return createSession(sessionKey, dialogue, ncpName);
     }
 }

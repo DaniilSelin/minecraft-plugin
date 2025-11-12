@@ -7,8 +7,8 @@ import java.util.List;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class Dialogue {
-    @JsonProperty("id")
-    public int id;                   // id диалога
+    @JsonProperty("npcName")
+    public String npcName;                   // id npc для которого диалог
 
     @JsonProperty("title")
     public String title;                // название

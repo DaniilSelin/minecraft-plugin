@@ -10,10 +10,12 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import load.impl.LoadDialogue;
+import load.impl.LoadDialogues;
 import load.impl.LoadNpcConfig;
 import cmd.LoadCfgConvCommand;
 import cmd.LoadDialogsCommand;
+import cmd.RespawnNpcCommand;
+import cmd.LoadNPCConfigCommand;
 import dialogue.manage.ConversationManager;
 import dialogue.store.DialogueRepository;
 import listeners.api.ISteerVehicleHandler;
@@ -36,12 +38,10 @@ public class CorePlugin extends JavaPlugin implements Listener {
         File dialogsDir = new File(data, "dialogs");
         if (!dialogsDir.exists()) dialogsDir.mkdirs();
 
-        File dialogFile = new File(dialogsDir, "dialogue.json");
+        LoadDialogues loadDialogs = new LoadDialogues();
 
-        LoadDialogue loadDialogs = new LoadDialogue();
-
-        DialogueRepository repo = new DialogueRepository(dialogFile.getPath(), loadDialogs);
-        repo.loadDialogue();
+        DialogueRepository repo = new DialogueRepository(dialogsDir.getPath(), loadDialogs);
+        repo.loadDialogues();
 
         LoadCfgConv loadCfgUI = new LoadCfgConv();
         ConversationManager dialogManager = new ConversationManager(this, repo, loadCfgUI);
@@ -53,12 +53,6 @@ public class CorePlugin extends JavaPlugin implements Listener {
         ManagerRegistry.register(dialogManager);
 
         getServer().getPluginManager().registerEvents(dialogManager, this);
-
-        LoadDialogsCommand loadCommand = new LoadDialogsCommand(repo);
-        LoadCfgConvCommand loadCfgUICommand = new LoadCfgConvCommand(dialogManager, uiCfgFile.getPath());
-
-        getCommand("loaddialogs").setExecutor(loadCommand);
-        getCommand("loadUI").setExecutor(loadCfgUICommand);
 
         // регистрируем слушателей пакетов
         List<ISteerVehicleHandler> handlers = new ArrayList<>();
@@ -82,6 +76,18 @@ public class CorePlugin extends JavaPlugin implements Listener {
 
         npcManager.loadConfigs();
         npcManager.applyAll(true);
+        
+        LoadDialogsCommand loadCommand = new LoadDialogsCommand(repo);
+        getCommand("loaddialogs").setExecutor(loadCommand);
+
+        LoadCfgConvCommand loadCfgUICommand = new LoadCfgConvCommand(dialogManager, uiCfgFile.getPath());
+        getCommand("loadUI").setExecutor(loadCfgUICommand);
+
+        LoadNPCConfigCommand loadCfgNPC = new LoadNPCConfigCommand(npcManager);
+        getCommand("loadCfgNPC").setExecutor(loadCfgNPC);
+
+        RespawnNpcCommand respawnCmd = new RespawnNpcCommand(npcManager);
+        getCommand("respnnpc").setExecutor(respawnCmd);
     }
 
     @Override

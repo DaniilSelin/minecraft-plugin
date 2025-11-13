@@ -41,7 +41,6 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
     private final Map<String, Entity> activeEntities = new ConcurrentHashMap<>();
     private final Map<String, BukkitTask> lookTasks = new ConcurrentHashMap<>();
 
-    // active choice UI per player
     private final Map<Player, ChoiceSession> activeChoices = new ConcurrentHashMap<>();
 
     public ConversationManager(JavaPlugin plugin, AbstractDialogueRepository repo, ILoad loaderCfg) {
@@ -69,7 +68,6 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
         String sessionKey = npcName + "_" + player.getUniqueId().toString();
         activeEntities.put(sessionKey, entity);
 
-        // создаём сессию если её нет
         ConversationSession session = repo.ensureSessionForNpc(sessionKey, npcName);
         if (session == null) {
             plugin.getLogger().info("No dialogue for NPC: " + npcName + " (sessionKey=" + sessionKey + ")");
@@ -78,7 +76,6 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
             return;
         }
 
-        // стартуем таск, чтобы NPC смотрел на игрока
         startLookTask(player, entity, sessionKey);
 
         showNPCReplice(sessionKey, player);
@@ -140,7 +137,6 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
             if (ended) {
                 Bukkit.getScheduler().runTask(plugin, () -> endConversation(player, sessionKey));
             } else {
-                // показали новую строчку после смены стадии
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     showNPCReplice(sessionKey, player);
                     showPlayerOption(sessionKey, player);
@@ -149,8 +145,8 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
         });
     }
 
-    // showNPCReplice: вычисляем базовую локацию от NPC если есть, иначе от игрока (fallback)
     public void showNPCReplice(String sessionKey, Player player) {
+        removeHologramsSeenByPlayer(player);
         if (!repo.checkSession(sessionKey)) return;
         String text = repo.getCurrentLineText(sessionKey);
         if (text == null) return;
@@ -158,17 +154,14 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
         Entity npc = activeEntities.get(sessionKey);
         Location baseLoc;
         if (npc != null && !npc.isDead()) {
-            // над головой NPC
             baseLoc = npc.getLocation().clone().add(0, (this.cfg == null ? new ConversationConfig().hologram.height : this.cfg.hologram.height), 0);
         } else {
-            // fallback: позиция перед игроком как раньше
             org.bukkit.util.Vector dir = player.getEyeLocation().getDirection().normalize();
             double forward = (this.cfg == null ? new ConversationConfig().hologram.forward : this.cfg.hologram.forward);
             double height = (this.cfg == null ? new ConversationConfig().hologram.height : this.cfg.hologram.height);
             baseLoc = player.getLocation().clone().add(dir.multiply(forward)).add(0, height, 0);
         }
 
-        // очистить старые дисплеи
         List<TextDisplay> old = repo.getHologramLines(sessionKey);
         List<String> splitLines = SplitNPCReplice(text.isEmpty() ? "TEST DISPLAY" : text);
         List<String> allLines = FromateNPCReplice(splitLines);
@@ -192,7 +185,6 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
                 repo.setLastDisplayedText(sessionKey, String.join("\n", allLines));
                 plugin.getLogger().info("Created holograms: " + (newLines == null ? 0 : newLines.size()) + " for " + sessionKey);
 
-                // 4) теперь показываем их игроку и логируем showEntity ошибки
                 if (newLines != null) {
                     for (TextDisplay td : newLines) {
                         try {
@@ -262,30 +254,6 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
         return newLines;
     }
 
-        // 4) вспомогательная жёсткая очистка ближайших TextDisplay (ловит осиротевшие первые линии)
-    private void removeNearbyTextDisplays(Location loc, double radius) {
-        if (loc == null) return;
-        try {
-            int removed = 0;
-            for (Entity e : loc.getWorld().getNearbyEntities(loc, radius, radius, radius)) {
-                if (!(e instanceof TextDisplay)) continue;
-                TextDisplay td = (TextDisplay) e;
-                try {
-                    if (td.isDead()) continue;
-                    td.remove();
-                    removed++;
-                    plugin.getLogger().info("Removed stray TextDisplay id=" + td.getUniqueId() + " near " + loc);
-                } catch (Throwable t) {
-                    plugin.getLogger().warning("Failed to remove stray TextDisplay: " + t.getMessage());
-                }
-            }
-            if (removed > 0) plugin.getLogger().info("removeNearbyTextDisplays removed " + removed + " entities");
-        } catch (Throwable t) {
-            plugin.getLogger().warning("removeNearbyTextDisplays failed: " + t.getMessage());
-        }
-    }
-
-    // --- выбор/UI ---
     private void startChoice(Player player, List<PlayerOption> options, Consumer<Integer> onSelect) {
         ChoiceSession choiceSession = new ChoiceSession(options, onSelect);
         activeChoices.put(player, choiceSession);
@@ -319,7 +287,6 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
         player.sendActionBar(msg.toString());
     }
 
-    // утилита: принимает hex (#rrggbb) или возвращает переданную секвенцию, в противном случае fallback
     private String toMinecraftColor(String hexOr, String fallback) {
         if (hexOr == null) return fallback;
         String s = hexOr.trim();
@@ -390,14 +357,12 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
         activeChoices.remove(player);
     }
 
-    // вспомогательная функция для корректного удаления голограмм у игрока перед remove()
     private void removeHologramLinesForPlayer(JavaPlugin plugin, List<TextDisplay> lines, Player player) {
         if (lines == null) return;
         Bukkit.getScheduler().runTask(plugin, () -> {
             for (TextDisplay td : lines) {
                 if (td == null || td.isDead()) continue;
                 try {
-                    // сначала скрыть у игрока (если показывали через showEntity)
                     try { player.hideEntity(plugin, td); } catch (Throwable ignored) {}
                     td.remove();
                 } catch (Throwable t) {
@@ -433,11 +398,93 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
         e.setCancelled(true);
     }
 
-    // Если игрок вышел из игры – отменяем активный выбор
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
         activeChoices.remove(player);
+    }
+
+    // НЕ ТРОГАТЬ, НЕЙРО-ПОМОИ, которые я не желаю разьбирать, но которые работаю
+    public void removeHologramsSeenByPlayer(Player target) {
+        if (target == null) return;
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            for (String sessionKey : new ArrayList<>(activeEntities.keySet())) {
+                List<TextDisplay> stored = repo.getHologramLines(sessionKey);
+                if (stored == null || stored.isEmpty()) continue;
+
+                List<TextDisplay> keep = new ArrayList<>();
+                boolean repoChanged = false;
+
+                for (TextDisplay td : stored) {
+                    if (td == null || td.isDead()) continue;
+
+                    if (!target.canSee(td)) {
+                        keep.add(td);
+                        continue;
+                    }
+
+                    boolean seenByOthers = false;
+                    for (Player p : Bukkit.getOnlinePlayers()) {
+                        if (p == null || p.equals(target)) continue;
+                        try {
+                            if (p.canSee(td)) { seenByOthers = true; break; }
+                        } catch (Throwable ignored) {}
+                    }
+
+                    if (seenByOthers) {
+                        // нельзя удалить глобально — скрываем только для target
+                        try { target.hideEntity(plugin, td); } catch (Throwable ignored) {}
+                        keep.add(td);
+                    } else {
+                        // безопасно удалить глобально — сначала скрываем для target, потом remove()
+                        try { target.hideEntity(plugin, td); } catch (Throwable ignored) {}
+                        try {
+                            td.remove();
+                            repo.getClass();
+                            plugin.getLogger().info("Removed TextDisplay id=" + td.getUniqueId() + " (seen only by " + target.getName() + ")");
+                            repoChanged = true;
+                        } catch (Throwable t) {
+                            plugin.getLogger().warning("Failed to remove TextDisplay id=" + (td == null ? "null" : td.getUniqueId()) + ": " + t.getMessage());
+                            keep.add(td);
+                        }
+                    }
+                }
+
+                if (repoChanged) {
+                    repo.setHologramLines(sessionKey, keep.isEmpty() ? null : keep);
+                }
+            }
+
+            Location ploc = target.getLocation();
+            try {
+                for (Entity e : ploc.getWorld().getNearbyEntities(ploc, 8, 8, 8)) {
+                    if (!(e instanceof TextDisplay)) continue;
+                    TextDisplay td = (TextDisplay) e;
+                    if (td.isDead()) continue;
+                    if (!target.canSee(td)) continue;
+
+                    boolean otherSee = false;
+                    for (Player p : Bukkit.getOnlinePlayers()) {
+                        if (p.equals(target)) continue;
+                        if (p.canSee(td)) { otherSee = true; break; }
+                    }
+
+                    if (otherSee) {
+                        try { target.hideEntity(plugin, td); } catch (Throwable ignored) {}
+                    } else {
+                        try { target.hideEntity(plugin, td); } catch (Throwable ignored) {}
+                        try {
+                            td.remove();
+                            plugin.getLogger().info("Removed stray TextDisplay id=" + td.getUniqueId() + " near player " + target.getName());
+                        } catch (Throwable t) {
+                            plugin.getLogger().warning("Failed to remove stray TextDisplay: " + t.getMessage());
+                        }
+                    }
+                }
+            } catch (Throwable t) {
+                plugin.getLogger().warning("Nearby-clean failed: " + t.getMessage());
+            }
+        });
     }
 }
 

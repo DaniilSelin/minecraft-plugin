@@ -1,0 +1,18 @@
+{
+  "npcName": "Ruslanchik",
+  "title": "Пример диалога",
+  "stages": [
+    {
+      "id": 0,
+      "lines": [
+        {
+          "id": 0,
+          "speaker": "npc_merchant",
+          "text": "Я тебе не верю",
+          "options": [
+            {"id":0,"text":"...","next_stage_id":0}
+          ]
+        }
+      ]
+    }]
+}

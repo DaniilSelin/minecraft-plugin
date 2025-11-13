@@ -1,0 +1,104 @@
+{
+  "npcName": "NeIvanNeIvanovich",
+  "title": "Пример диалога",
+  "stages": [
+    {
+      "id": 0,
+      "lines": [
+        {
+          "id": 0,
+          "speaker": "npc_merchant",
+          "text": "Привет, попутник. Что ищешь?",
+          "options": [
+            {"id":0,"text":"Что у тебя есть?","next_stage_id":1},
+            {"id":1,"text":"У тебя работа найдётся?","next_stage_id":2},
+            {"id":2,"text":"Проваливай.","next_stage_id":3},
+            {"id":3,"text":"Просто прохожу мимо.","next_stage_id":4}
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "lines": [
+        {
+          "id": 0,
+          "speaker": "npc_merchant",
+          "text": "У меня есть меч и щит. Ещё кое-что для особых клиентов.",
+          "options": [
+            {"id":0,"text":"Купить меч","effects":{"giveItem":"sword_01"},"next_stage_id":0},
+            {"id":1,"text":"Купить щит","effects":{"giveItem":"shield_01"},"next_stage_id":0},
+            {"id":2,"text":"Покажи особый товар","conditions":{"flag":"trusted"},"next_stage_id":5}
+          ]
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "lines": [
+        {
+          "id": 0,
+          "speaker": "npc_merchant",
+          "text": "Есть одно дельце. Надо доставить посылку в соседнюю деревню.",
+          "options": [
+            {"id":0,"text":"Берусь.","effects":{"setFlag":"courier_job"},"next_stage_id":6},
+            {"id":1,"text":"Не интересно.","next_stage_id":0}
+          ]
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "lines": [
+        {
+          "id": 0,
+          "speaker": "npc_merchant",
+          "text": "Эй! Не груби. Я запомню твои слова.",
+          "options": [
+            {"id":0,"text":"(уйти)","effects":{"setFlag":"merchant_offended"},"next_stage_id":6}
+          ]
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "lines": [
+        {
+          "id": 0,
+          "speaker": "npc_merchant",
+          "text": "Ну, проходи. Может, ещё увидимся.",
+          "options": [
+            {"id":0,"text":"(уйти)","next_stage_id":0}
+          ]
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "lines": [
+        {
+          "id": 0,
+          "speaker": "npc_merchant",
+          "text": "Для тебя у меня есть редкий амулет.",
+          "options": [
+            {"id":0,"text":"Купить амулет","effects":{"giveItem":"amulet_rare"},"next_stage_id":6},
+            {"id":1,"text":"Дороговато...","next_stage_id":6}
+          ]
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "lines": [
+        {
+          "id": 0,
+          "speaker": "npc_merchant",
+          "text": "...",
+          "options": [
+            {"id":0,"text":"Дороговато...","next_stage_id":0}
+          ]
+        }
+      ]
+    }
+  ]
+}

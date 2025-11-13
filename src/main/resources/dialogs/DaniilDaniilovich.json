@@ -1,0 +1,59 @@
+{
+  "npcName": "DaniilDaniilovich",
+  "title": "Пример диалога",
+  "stages": [
+    {
+      "id": 0,
+      "lines": [
+        {
+          "id": 0,
+          "speaker": "zondbi",
+          "text": "Я зондби, что ты от меня хочешь?",
+          "options": [
+            { "id": 0, "text": "да ничего, мимо проходил", "next_stage_id": 3 },
+            { "id": 1, "text": "Ну че то ты подозрительный, чего рыщешь тут?", "next_stage_id": 1 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "lines": [
+        {
+          "id": 0,
+          "speaker": "zondbi",
+          "text": "Мозги бы мне на обед, жаль ты мне помочь не можешь",
+          "options": [
+            { "id": 0, "text": "", "next_stage_id": 4 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "lines": [
+        {
+          "id": 0,
+          "speaker": "zondbi",
+          "text": "Ну иди...",
+          "options": [
+            { "id": 0, "text": "", "next_stage_id": 3 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "lines": [
+        {
+          "id": 0,
+          "speaker": "zondbi",
+          "text": "...",
+          "options": [
+            { "id": 0, "text": "", "next_stage_id": 4 }
+          ]
+        }
+      ]
+    }
+  ]
+}

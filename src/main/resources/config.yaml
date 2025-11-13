@@ -1,30 +1,56 @@
-# npcs.yml
 npcs:
   - id: 1
     name: IvanIvanovich
     type: VILLAGER
     location:
       world: world
-      x: 96.0
-      y: 80.0
-      z: 274.3
+      x: 97
+      y: 103
+      z: 335
       yaw: 0.0
       pitch: 0.0
     traits:
-      - type: dialog
-
+      - type: dialogbehavior
   - id: 2
+    name: NeIvanNeIvanovich
+    type: CHICKEN
+    location:
+      world: world
+      x: 98
+      y: 104
+      z: 336
+      yaw: 0.0
+      pitch: 0.0
+    traits:
+      - type: dialogbehavior
+
+  - id: 3
     name: DaniilDaniilovich
     type: ZOMBIE
     location:
-      world: world_nether
-      x: -10.5
-      y: 65.0
-      z: 48.0
+      world: world
+      x: 119
+      y: 96
+      z: 350
       yaw: 90.0
       pitch: 0.0
+    traits:
+      - type: dialogbehavior
+  
+  # - id: 4
+  #   name: Ruslanchik
+  #   type: PLAYER
+  #   location:
+  #     world: world
+  #     x: 119
+  #     y: 96
+  #     z: 350
+  #     yaw: 90.0
+  #     pitch: 0.0
+  #   traits:
+  #     - type: dialogbehavior
+  
     
-
 # опционально: глобальные параметры
 defaults:
   spawn-on-enable: true

@@ -1,0 +1,50 @@
+kind: pipeline
+type: docker
+name: build-minecraft-plugin
+
+steps:
+  - name: build
+    image: gradle:8.10-jdk21
+    volumes:
+      - name: dockersock
+        path: /var/run/docker.sock
+    commands:
+      - echo "=== Gradle build ==="
+      - gradle clean build
+      - echo "=== Содержимое app/build/libs ==="
+      - ls -lah app/build/libs
+
+  - name: copy-to-minecraft
+    image: docker:cli
+    volumes:
+      - name: dockersock
+        path: /var/run/docker.sock
+    commands:
+      - docker mkdir -p minecraft:/data/plugins/VarMain/dialogs
+      - docker cp app/build/resources/* minecraft:/data/plugins/VarMain/
+      - echo "=== Копируем jar в контейнер Minecraft ==="
+      - docker cp app/build/libs/*.jar minecraft:/data/plugins/
+      - echo "=== Проверка содержимого контейнера ==="
+      - docker exec minecraft ls -lah /data/plugins
+
+  - name: restart-minecraft
+    image: docker:cli
+    volumes:
+      - name: dockersock
+        path: /var/run/docker.sock
+    commands:
+      - echo "=== Перезапуск Minecraft контейнера ==="
+      - docker restart minecraft
+      - echo "=== Показываем логи сервера до readiness ==="
+      - docker logs -f minecraft &
+      - echo "=== Ждем, пока контейнер станет healthy ==="
+      - |
+        until [ "$(docker inspect --format='{{.State.Health.Status}}' minecraft 2>/dev/null)" = "healthy" ]; do
+          sleep 5
+        done
+      - echo "Minecraft готов!"
+
+volumes:
+  - name: dockersock
+    host:
+      path: /var/run/docker.sock

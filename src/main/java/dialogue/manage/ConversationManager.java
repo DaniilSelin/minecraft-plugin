@@ -21,14 +21,14 @@ import org.bukkit.scheduler.BukkitTask;
 
 import com.destroystokyo.paper.event.player.PlayerJumpEvent;
 
-import load.ILoad;
+import dialogue.models.ConversationConfig;
 import dialogue.models.PlayerOption;
 import dialogue.store.AbstractDialogueRepository;
 import dialogue.store.session.ChoiceSession;
 import dialogue.store.session.ConversationSession;
-import dialogue.models.ConversationConfig;
-import npc.trait.ITraitManager;
 import listeners.api.ISteerVehicleHandler;
+import load.ILoad;
+import npc.trait.ITraitManager;
 
 public class ConversationManager implements Listener, ISteerVehicleHandler, ITraitManager {
     private final JavaPlugin plugin;
@@ -39,9 +39,10 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
     private ConversationConfig cfg;
 
     private final Map<String, Entity> activeEntities = new ConcurrentHashMap<>();
-    private final Map<String, BukkitTask> lookTasks = new ConcurrentHashMap<>();
 
     private final Map<Player, ChoiceSession> activeChoices = new ConcurrentHashMap<>();
+    private final Map<java.util.UUID, BukkitTask> lookTasks = new ConcurrentHashMap<>();
+    private final Map<java.util.UUID, Player> lookTargets = new ConcurrentHashMap<>();
 
     public ConversationManager(JavaPlugin plugin, AbstractDialogueRepository repo, ILoad loaderCfg) {
         this.plugin = plugin;
@@ -83,22 +84,65 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
     }
 
     private void startLookTask(Player player, Entity entity, String sessionKey) {
-        // пусто, не трогаем сущность, а то ерунда какая то получилась
-        // BukkitTask task = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
-        //     if (entity == null || entity.isDead()) return;
-        //     Location npcLoc = entity.getLocation();
-        //     Location playerLoc = player.getLocation().clone().add(0, 1.5, 0); // чуть выше глаз
-        //     npcLoc.setDirection(playerLoc.toVector().subtract(npcLoc.toVector()).normalize());
-        //     entity.teleport(npcLoc);
-        // }, 0L, 2L); // обновляем каждые 2 тика
-        // lookTasks.put(sessionKey, task);
+        if (entity == null || player == null) return;
+        java.util.UUID eid = entity.getUniqueId();
+
+        lookTargets.put(eid, player);
+
+        if (lookTasks.containsKey(eid)) return;
+
+        BukkitTask task = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            try {
+                Player target = lookTargets.get(eid);
+                if (target == null) return;
+
+                Entity cur = Bukkit.getServer().getEntity(eid);
+                if (cur == null || cur.isDead()) {
+                    stopLookTask(eid);
+                    return;
+                }
+
+                Location npcLoc = cur.getLocation().clone();
+                Location npcEye;
+                if (cur instanceof org.bukkit.entity.LivingEntity le) {
+                    npcEye = le.getEyeLocation().clone();
+                } else {
+                    npcEye = npcLoc.clone().add(0.0, 1.5, 0.0);
+                }
+
+                Location playerEye = target.getEyeLocation().clone();
+
+                org.bukkit.util.Vector dir = playerEye.toVector().subtract(npcEye.toVector());
+                if (dir.lengthSquared() == 0) return;
+                dir = dir.normalize();
+
+                npcLoc.setDirection(dir);
+                try {
+                    cur.teleport(npcLoc);
+                } catch (Throwable t) {
+                    plugin.getLogger().warning("lookTask: teleport failed for npc " + eid + ": " + t.getMessage());
+                }
+            } catch (Throwable t) {
+                plugin.getLogger().warning("lookTask error for npc " + eid + ": " + t.getMessage());
+            }
+        }, 0L, 0L);
+        lookTasks.put(eid, task);
     }
-    
-    private void stopLookTask(String sessionKey) {
-        BukkitTask task = lookTasks.remove(sessionKey);
+
+    private void stopLookTask(java.util.UUID entityId) {
+        if (entityId == null) return;
+        BukkitTask task = lookTasks.remove(entityId);
         if (task != null) task.cancel();
-        activeEntities.remove(sessionKey);
+        lookTargets.remove(entityId);
     }
+
+    private void stopLookTask(String sessionKey) {
+        if (sessionKey == null) return;
+        Entity e = activeEntities.get(sessionKey);
+        if (e == null) return;
+        stopLookTask(e.getUniqueId());
+    }
+
 
     private void endConversation(Player player, String sessionKey) {
         activeChoices.remove(player);
@@ -340,8 +384,10 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
         }
 
         for (String key : toCleanup) {
-            BukkitTask t = lookTasks.remove(key);
-            if (t != null) t.cancel();
+            Entity ent = activeEntities.get(key);
+            if (ent != null) {
+                stopLookTask(ent.getUniqueId());
+            }
 
             List<TextDisplay> old = repo.getHologramLines(key);
             if (old != null && !old.isEmpty()) {
@@ -353,7 +399,7 @@ public class ConversationManager implements Listener, ISteerVehicleHandler, ITra
             repo.endSession(key);
             activeEntities.remove(key);
         }
-        
+
         activeChoices.remove(player);
     }
 
